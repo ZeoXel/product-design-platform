@@ -145,6 +145,9 @@ class DesignAgent:
             )
 
         except Exception as e:
+            import traceback
+            print(f"[Design Agent Error] {str(e)}")
+            print(f"[Design Agent Traceback] {traceback.format_exc()}")
             return DesignResponse(
                 success=False,
                 message=f"生成失败: {str(e)}",
