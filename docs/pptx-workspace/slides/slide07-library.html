@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #F4F6F6; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #1C2833; padding: 15pt 40pt; display: flex; align-items: center;
+}
+.badge {
+  background: #BF9A4A; border-radius: 3pt; margin-right: 15pt;
+  padding: 4pt 10pt; display: flex; align-items: center;
+}
+.badge p { color: #1C2833; font-size: 10pt; font-weight: bold; margin: 0; }
+h1 { color: #FFFFFF; font-size: 22pt; margin: 0; }
+.content { padding: 15pt 40pt; flex: 1; display: flex; gap: 20pt; }
+.left { flex: 1; }
+.right { flex: 1; }
+.section-title { color: #1C2833; font-size: 12pt; font-weight: bold; margin: 0 0 8pt 0; }
+.compare-box { background: #FFFFFF; border-radius: 6pt; padding: 10pt; margin-bottom: 8pt; }
+.compare-label { color: #E74C3C; font-size: 10pt; font-weight: bold; margin: 0 0 6pt 0; }
+.compare-label.good { color: #27AE60; }
+.file-list { margin-left: 15pt; }
+.file-list p { color: #2E4053; font-size: 9pt; margin: 2pt 0; }
+.metadata-box {
+  background: #2E4053; border-radius: 4pt; padding: 6pt 8pt; margin-top: 6pt;
+}
+.metadata-box p { color: #AAB7B8; font-size: 8pt; margin: 2pt 0; }
+.metadata-box .highlight { color: #BF9A4A; }
+.evolution-table { background: #FFFFFF; border-radius: 6pt; overflow: hidden; }
+.table-header { display: flex; background: #2E4053; }
+.table-header p {
+  flex: 1; color: #FFFFFF; font-size: 9pt; padding: 6pt 8pt; margin: 0;
+  text-align: center; font-weight: bold;
+}
+.table-row { display: flex; border-bottom: 1pt solid #E5E5E5; }
+.table-row:last-child { border-bottom: none; }
+.table-cell { flex: 1; padding: 6pt 8pt; font-size: 8pt; color: #2E4053; text-align: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>核心优势 4</p></div>
+  <h1>智能参考图库</h1>
+</div>
+<div class="content">
+  <div class="left">
+    <p class="section-title">从"图片库"到"知识资产"</p>
+    <div class="compare-box">
+      <p class="compare-label">传统图片库</p>
+      <div class="file-list">
+        <p>image_001.jpg</p>
+        <p>image_002.jpg</p>
+        <p>...（只有图片文件）</p>
+      </div>
+    </div>
+    <div class="compare-box">
+      <p class="compare-label good">我们的结构化图库</p>
+      <div class="file-list">
+        <p>product_001/</p>
+        <p>├─ image.jpg (视觉资产)</p>
+        <p>├─ elements.json (元素清单)</p>
+        <p>├─ physical_specs.json (物理参数)</p>
+        <p>├─ cost_data.json (成本数据)</p>
+        <p>└─ business_tags.json (业务标签)</p>
+      </div>
+      <div class="metadata-box">
+        <p><span class="highlight">元素:</span> [贝壳, 海星, 珍珠]</p>
+        <p><span class="highlight">参数:</span> 重量15g, 长度12cm</p>
+        <p><span class="highlight">成本:</span> 材料¥8, 人工¥5</p>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <p class="section-title">图库自动进化</p>
+    <div class="evolution-table">
+      <div class="table-header">
+        <p>进化机制</p>
+        <p>触发条件</p>
+        <p>效果</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">成功案例入库</p>
+        <p class="table-cell">评价4+星</p>
+        <p class="table-cell">扩充优质参考</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">高频组合合成</p>
+        <p class="table-cell">请求30+次</p>
+        <p class="table-cell">预生成参考图</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">低质量淘汰</p>
+        <p class="table-cell">成功率&lt;50%</p>
+        <p class="table-cell">降低推荐权重</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">季节性更新</p>
+        <p class="table-cell">节日/季节变化</p>
+        <p class="table-cell">生成主题变体</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

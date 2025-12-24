@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ReferenceProduct } from '../types';
+import { api } from '../services/api';
 
-// 模拟数据
-const mockProducts: ReferenceProduct[] = [
-  { id: '1', imageUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400&h=400&fit=crop', elements: ['贝壳', '珍珠'], style: '海洋', salesTier: 'A' },
-  { id: '2', imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400&h=400&fit=crop', elements: ['水晶', '金属'], style: '极简', salesTier: 'A' },
-  { id: '3', imageUrl: 'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=400&h=400&fit=crop', elements: ['编织', '珠子'], style: '波西米亚', salesTier: 'B' },
-  { id: '4', imageUrl: 'https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=400&h=400&fit=crop', elements: ['星月', '金属'], style: '复古', salesTier: 'A' },
-  { id: '5', imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop', elements: ['宝石', '银饰'], style: '优雅', salesTier: 'B' },
-  { id: '6', imageUrl: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=400&h=400&fit=crop', elements: ['流苏', '珠子'], style: '民族', salesTier: 'C' },
-  { id: '7', imageUrl: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=400&h=400&fit=crop', elements: ['几何', '金属'], style: '现代', salesTier: 'A' },
-  { id: '8', imageUrl: 'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=400&h=400&fit=crop', elements: ['花朵', '珐琅'], style: '田园', salesTier: 'B' },
-  { id: '9', imageUrl: 'https://images.unsplash.com/photo-1625314897518-bb4fe6e95229?w=400&h=400&fit=crop', elements: ['运动', '硅胶'], style: '运动', salesTier: 'A' },
-  { id: '10', imageUrl: 'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?w=400&h=400&fit=crop', elements: ['皮革', '金属'], style: '朋克', salesTier: 'C' },
-  { id: '11', imageUrl: 'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?w=400&h=400&fit=crop', elements: ['珍珠', '蝴蝶结'], style: '甜美', salesTier: 'B' },
-  { id: '12', imageUrl: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?w=400&h=400&fit=crop', elements: ['木珠', '麻绳'], style: '自然', salesTier: 'B' },
-];
+// 将后端数据转换为前端格式
+function transformGalleryItem(item: any): ReferenceProduct {
+  const primaryElements = item.analysis?.elements?.primary?.map((e: any) => e.type) || [];
+  const secondaryElements = item.analysis?.elements?.secondary?.map((e: any) => e.type) || [];
+  const styleTags = item.analysis?.style?.tags || [];
+
+  return {
+    id: item.id,
+    imageUrl: `/gallery/images/${item.filename}`,
+    elements: [...primaryElements, ...secondaryElements],
+    style: styleTags[0] || '未分类',
+    salesTier: item.salesTier || 'B'
+  };
+}
 
 const categories = ['全部', '珠宝', '运动', '海洋', '极简', '复古', '民族'];
 
@@ -27,6 +27,29 @@ export function Gallery({ onSelect }: GalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [products, setProducts] = useState<ReferenceProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 加载图库数据
+  useEffect(() => {
+    const loadGallery = async () => {
+      try {
+        setLoading(true);
+        const response = await api.listReferences({ limit: 100 });
+
+        if (response.success && response.items) {
+          const transformed = response.items.map(transformGalleryItem);
+          setProducts(transformed);
+        }
+      } catch (error) {
+        console.error('加载图库失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadGallery();
+  }, []);
 
   const toggleFavorite = (id: string) => {
     setFavorites(prev => {
@@ -40,7 +63,7 @@ export function Gallery({ onSelect }: GalleryProps) {
     });
   };
 
-  const filteredProducts = mockProducts.filter(product => {
+  const filteredProducts = products.filter(product => {
     const matchesSearch = searchQuery === '' ||
       product.elements.some(el => el.includes(searchQuery)) ||
       product.style.includes(searchQuery);
@@ -97,8 +120,16 @@ export function Gallery({ onSelect }: GalleryProps) {
 
       {/* 图库网格 */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {filteredProducts.map((product) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-gray-500">加载中...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {filteredProducts.map((product) => (
             <div
               key={product.id}
               className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-gray-300"
@@ -157,16 +188,17 @@ export function Gallery({ onSelect }: GalleryProps) {
               </div>
             </div>
           ))}
-        </div>
 
-        {filteredProducts.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="text-gray-500">未找到匹配的参考图</p>
-            <p className="text-gray-400 text-sm mt-1">试试其他关键词或分类</p>
-          </div>
+          {filteredProducts.length === 0 && !loading && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <p className="text-gray-500">未找到匹配的参考图</p>
+              <p className="text-gray-400 text-sm mt-1">试试其他关键词或分类</p>
+            </div>
+          )}
+        </div>
         )}
       </div>
 

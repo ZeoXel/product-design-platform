@@ -100,3 +100,4 @@ export interface ReferenceProduct {
   style: string;
   salesTier: 'A' | 'B' | 'C' | 'D';
 }
+

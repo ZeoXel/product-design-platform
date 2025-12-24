@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #F4F6F6; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #1C2833; padding: 15pt 40pt; display: flex; align-items: center;
+}
+.header-accent { width: 4pt; height: 26pt; background: #BF9A4A; margin-right: 15pt; }
+h1 { color: #FFFFFF; font-size: 22pt; margin: 0; }
+.content { padding: 15pt 40pt; flex: 1; display: flex; gap: 20pt; }
+.left { flex: 1; }
+.right { flex: 1; }
+.section-title { color: #1C2833; font-size: 13pt; font-weight: bold; margin: 0 0 12pt 0; }
+.efficiency-table { background: #FFFFFF; border-radius: 6pt; overflow: hidden; }
+.table-header { display: flex; background: #2E4053; }
+.table-header p {
+  flex: 1; color: #FFFFFF; font-size: 9pt; padding: 6pt 8pt; margin: 0;
+  text-align: center; font-weight: bold;
+}
+.table-row { display: flex; border-bottom: 1pt solid #E5E5E5; }
+.table-row:last-child { border-bottom: none; }
+.table-cell { flex: 1; padding: 6pt 8pt; font-size: 8pt; color: #2E4053; text-align: center; }
+.table-cell.highlight { color: #27AE60; font-weight: bold; }
+.cost-box {
+  background: #FFFFFF; border-radius: 6pt; padding: 10pt; margin-bottom: 8pt;
+}
+.cost-title { color: #E74C3C; font-size: 10pt; font-weight: bold; margin: 0 0 8pt 0; }
+.cost-title.good { color: #27AE60; }
+.cost-item { display: flex; justify-content: space-between; margin-bottom: 4pt; }
+.cost-item p { color: #2E4053; font-size: 9pt; margin: 0; }
+.cost-total {
+  border-top: 1pt solid #E5E5E5; padding-top: 6pt; margin-top: 6pt;
+  display: flex; justify-content: space-between;
+}
+.cost-total p { color: #1C2833; font-size: 10pt; margin: 0; font-weight: bold; }
+.savings-box {
+  background: #27AE60; border-radius: 6pt; padding: 10pt; text-align: center;
+}
+.savings-box p { color: #FFFFFF; font-size: 11pt; margin: 0; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-accent"></div>
+  <h1>效益分析</h1>
+</div>
+<div class="content">
+  <div class="left">
+    <p class="section-title">效率提升对比</p>
+    <div class="efficiency-table">
+      <div class="table-header">
+        <p>环节</p>
+        <p>传统方式</p>
+        <p>使用本系统</p>
+        <p>提升</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">单款设计</p>
+        <p class="table-cell">2-4小时</p>
+        <p class="table-cell">5-15分钟</p>
+        <p class="table-cell highlight">90%</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">修改迭代</p>
+        <p class="table-cell">30-60分钟/次</p>
+        <p class="table-cell">1-2分钟/次</p>
+        <p class="table-cell highlight">95%</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">方案产出/天</p>
+        <p class="table-cell">2-3个</p>
+        <p class="table-cell">20-30个</p>
+        <p class="table-cell highlight">10x</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell">创意到生产</p>
+        <p class="table-cell">3-5天</p>
+        <p class="table-cell">当天完成</p>
+        <p class="table-cell highlight">80%</p>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <p class="section-title">年度成本对比</p>
+    <div class="cost-box">
+      <p class="cost-title">自训练 LoRA 模型</p>
+      <div class="cost-item">
+        <p>数据标注</p>
+        <p>¥12,500</p>
+      </div>
+      <div class="cost-item">
+        <p>GPU训练</p>
+        <p>¥3,600</p>
+      </div>
+      <div class="cost-item">
+        <p>年度运维</p>
+        <p>¥20,400</p>
+      </div>
+      <div class="cost-total">
+        <p>年度总成本</p>
+        <p>¥36,500</p>
+      </div>
+    </div>
+    <div class="cost-box">
+      <p class="cost-title good">本系统 (图生图+自进化)</p>
+      <div class="cost-item">
+        <p>初始投入</p>
+        <p>¥800</p>
+      </div>
+      <div class="cost-item">
+        <p>年度API成本</p>
+        <p>¥21,240</p>
+      </div>
+      <div class="cost-total">
+        <p>年度总成本</p>
+        <p>¥22,040</p>
+      </div>
+    </div>
+    <div class="savings-box">
+      <p>节省 ¥14,460 (40%成本下降)</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

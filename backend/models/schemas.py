@@ -64,14 +64,66 @@ class ImageGenerateRequest(BaseModel):
     image_size: ImageSize = Field(ImageSize.SIZE_2K, description="图像尺寸")
 
 
+class SimilarSearchRequest(BaseModel):
+    """相似图片搜索请求"""
+    image: str = Field(..., description="图像base64数据")
+    text: Optional[str] = Field(None, description="可选的文本描述")
+    top_k: int = Field(5, description="返回数量")
+    threshold: float = Field(0.5, description="相似度阈值")
+
+
 # ==================== 响应模型 ====================
 
 class AnalysisResult(BaseModel):
-    """图像分析结果"""
+    """图像分析结果（旧格式，保留兼容性）"""
     elements: List[dict] = Field(default_factory=list, description="检测到的元素")
     style: dict = Field(default_factory=dict, description="风格特征")
     description: str = Field("", description="整体描述")
     suggestions: List[str] = Field(default_factory=list, description="设计建议")
+
+
+class ElementItem(BaseModel):
+    """元素项"""
+    type: str = Field(..., description="元素类型")
+    color: Optional[str] = Field(None, description="颜色")
+    count: Optional[int] = Field(None, description="数量")
+    material: Optional[str] = Field(None, description="材质")
+    position: Optional[str] = Field(None, description="位置")
+
+
+class ElementsGroup(BaseModel):
+    """元素分组"""
+    primary: List[ElementItem] = Field(default_factory=list, description="主要元素（视觉主体）")
+    secondary: List[ElementItem] = Field(default_factory=list, description="辅助元素（装饰填充）")
+    hardware: List[ElementItem] = Field(default_factory=list, description="五金件（功能性）")
+
+
+class StyleInfo(BaseModel):
+    """风格信息"""
+    tags: List[str] = Field(default_factory=list, description="风格标签")
+    mood: str = Field("", description="整体情绪/氛围")
+
+
+class PhysicalSpecs(BaseModel):
+    """物理规格"""
+    lengthCm: float = Field(..., description="长度（厘米）")
+    weightG: float = Field(..., description="重量（克）")
+
+
+class SimilarItem(BaseModel):
+    """相似产品"""
+    id: str = Field(..., description="产品ID")
+    imageUrl: str = Field(..., description="图片URL")
+    similarity: float = Field(..., description="相似度（0-1）")
+
+
+class ImageAnalysis(BaseModel):
+    """图像分析结果（前端格式）"""
+    elements: ElementsGroup = Field(..., description="元素分组")
+    style: StyleInfo = Field(..., description="风格信息")
+    physicalSpecs: PhysicalSpecs = Field(..., description="物理规格")
+    suggestions: List[str] = Field(default_factory=list, description="设计建议")
+    similarItems: Optional[List[SimilarItem]] = Field(None, description="相似产品")
 
 
 class GenerationResult(BaseModel):
@@ -91,7 +143,7 @@ class DesignResponse(BaseModel):
     """设计生成响应"""
     success: bool = Field(..., description="是否成功")
     image_url: Optional[str] = Field(None, description="生成图像URL")
-    analysis: Optional[AnalysisResult] = Field(None, description="图像分析结果")
+    analysis: Optional[ImageAnalysis] = Field(None, description="图像分析结果")
     prompt_used: Optional[str] = Field(None, description="使用的提示词")
     message: str = Field("", description="处理消息")
     cost_estimate: Optional[dict] = Field(None, description="成本估算")

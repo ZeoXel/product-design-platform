@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from config import get_settings
@@ -48,6 +49,11 @@ app.add_middleware(
 # 注册路由
 app.include_router(router)
 
+# 挂载静态文件服务（图库图片）
+gallery_images_path = Path(__file__).parent / "data" / "gallery" / "images"
+gallery_images_path.mkdir(parents=True, exist_ok=True)
+app.mount("/gallery/images", StaticFiles(directory=str(gallery_images_path)), name="gallery_images")
+
 
 # 根路径
 @app.get("/")
@@ -66,6 +72,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8001,
+        port=8010,
         reload=settings.DEBUG,
     )

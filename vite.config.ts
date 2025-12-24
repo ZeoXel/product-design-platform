@@ -8,7 +8,11 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8010',
+        changeOrigin: true,
+      },
+      '/gallery': {
+        target: 'http://localhost:8010',
         changeOrigin: true,
       },
     },

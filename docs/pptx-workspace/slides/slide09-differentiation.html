@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #1C2833; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header { padding: 15pt 40pt; }
+h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.subtitle { color: #BF9A4A; font-size: 13pt; margin: 6pt 0 0 0; }
+.content { padding: 12pt 40pt; flex: 1; display: flex; gap: 20pt; }
+.left { flex: 1.2; }
+.right { flex: 0.8; }
+.compare-table {
+  background: rgba(255,255,255,0.05); border-radius: 8pt; overflow: hidden;
+}
+.table-header { display: flex; background: #2E4053; }
+.table-header p {
+  flex: 1; color: #FFFFFF; font-size: 9pt; padding: 8pt; margin: 0;
+  text-align: center; font-weight: bold;
+}
+.table-row { display: flex; border-bottom: 1pt solid rgba(255,255,255,0.1); }
+.table-row:last-child { border-bottom: none; }
+.table-cell {
+  flex: 1; padding: 8pt; font-size: 8pt; text-align: center;
+}
+.table-cell.label { color: #AAB7B8; text-align: left; }
+.table-cell.bad { color: #E74C3C; }
+.table-cell.good { color: #27AE60; }
+.section-title { color: #BF9A4A; font-size: 12pt; font-weight: bold; margin: 0 0 12pt 0; }
+.barrier-box {
+  background: rgba(255,255,255,0.05); border-radius: 6pt;
+  padding: 12pt; margin-bottom: 10pt; border-left: 3pt solid #BF9A4A;
+}
+.barrier-title { color: #FFFFFF; font-size: 10pt; font-weight: bold; margin: 0 0 6pt 0; }
+.barrier-desc { color: #AAB7B8; font-size: 8pt; margin: 0; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>差异化竞争力</h1>
+  <p class="subtitle">为什么选择我们？</p>
+</div>
+<div class="content">
+  <div class="left">
+    <div class="compare-table">
+      <div class="table-header">
+        <p>维度</p>
+        <p>通用AI绘图(MJ/SD)</p>
+        <p>本系统</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">学习能力</p>
+        <p class="table-cell bad">无（每次独立生成）</p>
+        <p class="table-cell good">持续自进化</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">行业知识</p>
+        <p class="table-cell bad">无（通用模型）</p>
+        <p class="table-cell good">专业知识图谱</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">物理可行性</p>
+        <p class="table-cell bad">不保证</p>
+        <p class="table-cell good">基于真实参考</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">成本意识</p>
+        <p class="table-cell bad">无</p>
+        <p class="table-cell good">内置成本估算</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">用户数据</p>
+        <p class="table-cell bad">不沉淀</p>
+        <p class="table-cell good">专属知识资产</p>
+      </div>
+      <div class="table-row">
+        <p class="table-cell label">迭代方式</p>
+        <p class="table-cell bad">重新生成</p>
+        <p class="table-cell good">精确编辑</p>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <p class="section-title">核心壁垒</p>
+    <div class="barrier-box">
+      <p class="barrier-title">1. 知识图谱壁垒</p>
+      <p class="barrier-desc">挂饰行业的元素库、兼容性规则、工艺约束<br/>竞争对手需要数月才能积累</p>
+    </div>
+    <div class="barrier-box">
+      <p class="barrier-title">2. 数据飞轮壁垒</p>
+      <p class="barrier-desc">用户使用 → 数据沉淀 → 系统进化 → 更好体验<br/>先发优势持续扩大</p>
+    </div>
+    <div class="barrier-box">
+      <p class="barrier-title">3. 客户粘性壁垒</p>
+      <p class="barrier-desc">客户的审美偏好、设计历史沉淀在系统中<br/>迁移成本高，自然形成锁定</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

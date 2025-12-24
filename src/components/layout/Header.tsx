@@ -7,9 +7,9 @@ interface HeaderProps {
 
 export function Header({ currentPage, onNavigate }: HeaderProps) {
   const navItems = [
-    { id: 'workspace' as const, label: '工作台' },
-    { id: 'gallery' as const, label: '图库' },
-    { id: 'history' as const, label: '历史' },
+    { id: 'workspace' as const, label: '工作台', icon: null },
+    { id: 'gallery' as const, label: '图库', icon: null },
+    { id: 'history' as const, label: '历史', icon: null },
   ];
 
   return (

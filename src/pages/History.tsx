@@ -1,100 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import {
+  filterHistoryByTime,
+  searchHistory,
+  deleteHistoryItem,
+  getHistoryStats,
+  type HistoryItem
+} from '../services/historyService';
 
-interface HistoryItem {
-  id: string;
-  timestamp: Date;
-  instruction: string;
-  referenceUrl: string;
-  generatedUrl: string;
-  versionsCount: number;
-  status: 'success' | 'failed';
-  cost: number;
+interface HistoryProps {
+  onNavigate?: (page: 'workspace' | 'gallery' | 'history') => void;
+  onEdit?: (item: HistoryItem) => void;
 }
-
-// 模拟数据
-const mockHistory: HistoryItem[] = [
-  {
-    id: '1',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    instruction: '把粉色贝壳换成蓝色水晶',
-    referenceUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=200&h=200&fit=crop',
-    generatedUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&h=200&fit=crop',
-    versionsCount: 3,
-    status: 'success',
-    cost: 0.45,
-  },
-  {
-    id: '2',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    instruction: '增加星星装饰元素',
-    referenceUrl: 'https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=200&h=200&fit=crop',
-    generatedUrl: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=200&h=200&fit=crop',
-    versionsCount: 5,
-    status: 'success',
-    cost: 0.75,
-  },
-  {
-    id: '3',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5),
-    instruction: '改成运动风格手链',
-    referenceUrl: 'https://images.unsplash.com/photo-1625314897518-bb4fe6e95229?w=200&h=200&fit=crop',
-    generatedUrl: 'https://images.unsplash.com/photo-1625314897518-bb4fe6e95229?w=200&h=200&fit=crop',
-    versionsCount: 2,
-    status: 'success',
-    cost: 0.30,
-  },
-  {
-    id: '4',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    instruction: '颜色改成渐变紫色',
-    referenceUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=200&h=200&fit=crop',
-    generatedUrl: 'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?w=200&h=200&fit=crop',
-    versionsCount: 4,
-    status: 'success',
-    cost: 0.60,
-  },
-  {
-    id: '5',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-    instruction: '添加珍珠元素',
-    referenceUrl: 'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=200&h=200&fit=crop',
-    generatedUrl: 'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=200&h=200&fit=crop',
-    versionsCount: 3,
-    status: 'success',
-    cost: 0.45,
-  },
-];
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all';
 
-export function History() {
+export function History({ onNavigate, onEdit }: HistoryProps) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [stats, setStats] = useState({ total: 0, success: 0, failed: 0, totalCost: 0 });
+
+  // 加载历史记录
+  useEffect(() => {
+    loadHistory();
+  }, [timeFilter, searchQuery]);
+
+  const loadHistory = () => {
+    let items: HistoryItem[];
+    if (searchQuery.trim()) {
+      items = searchHistory(searchQuery);
+    } else {
+      items = filterHistoryByTime(timeFilter);
+    }
+    setHistoryItems(items);
+    setStats(getHistoryStats());
+  };
 
   const formatTime = (date: Date) => {
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
+    const dateObj = new Date(date);
+    const diff = now.getTime() - dateObj.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor(diff / (1000 * 60));
 
     if (minutes < 60) return `${minutes} 分钟前`;
     if (hours < 24) return `${hours} 小时前`;
-    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    return dateObj.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
   const formatDate = (date: Date) => {
     const now = new Date();
+    const dateObj = new Date(date);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-    const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const itemDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
 
     if (itemDate.getTime() === today.getTime()) return '今天';
     if (itemDate.getTime() === yesterday.getTime()) return '昨天';
-    return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+    return dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
   };
 
   // 按日期分组
-  const groupedHistory = mockHistory.reduce((groups, item) => {
+  const groupedHistory = historyItems.reduce((groups, item) => {
     const dateKey = formatDate(item.timestamp);
     if (!groups[dateKey]) {
       groups[dateKey] = [];
@@ -103,11 +70,23 @@ export function History() {
     return groups;
   }, {} as Record<string, HistoryItem[]>);
 
-  // 统计数据
-  const stats = {
-    total: mockHistory.length,
-    success: mockHistory.filter(h => h.status === 'success').length,
-    totalCost: mockHistory.reduce((sum, h) => sum + h.cost, 0),
+  const handleEdit = (item: HistoryItem) => {
+    if (onEdit) {
+      onEdit(item);
+    }
+  };
+
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('确定要删除这条历史记录吗？')) {
+      deleteHistoryItem(id);
+      loadHistory();
+    }
+  };
+
+  const handleView = (item: HistoryItem) => {
+    // 打开查看模态框或直接编辑
+    handleEdit(item);
   };
 
   return (
@@ -143,6 +122,20 @@ export function History() {
           </div>
         </div>
 
+        {/* 快速操作 */}
+        <div className="mb-6">
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">快速操作</p>
+          <button
+            onClick={() => onNavigate?.('workspace')}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            新建设计
+          </button>
+        </div>
+
         {/* 统计面板 */}
         <div className="mt-auto pt-4 border-t border-gray-200">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">统计</p>
@@ -154,7 +147,7 @@ export function History() {
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">成功率</span>
               <span className="text-green-600 font-medium">
-                {Math.round((stats.success / stats.total) * 100)}%
+                {stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}%
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -190,75 +183,122 @@ export function History() {
 
         {/* 历史列表 */}
         <div className="flex-1 overflow-y-auto p-6">
-          {Object.entries(groupedHistory).map(([date, items]) => (
-            <div key={date} className="mb-6">
-              <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-gray-300" />
-                {date}
-              </h3>
-              <div className="space-y-3">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
-                  >
-                    <div className="flex gap-4">
-                      {/* 缩略图 */}
-                      <div className="flex gap-2 shrink-0">
-                        <img
-                          src={item.referenceUrl}
-                          alt="参考图"
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                        <div className="flex items-center text-gray-300">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
+          {Object.keys(groupedHistory).length > 0 ? (
+            Object.entries(groupedHistory).map(([date, items]) => (
+              <div key={date} className="mb-6">
+                <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-gray-300" />
+                  {date}
+                </h3>
+                <div className="space-y-3">
+                  {items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
+                      onClick={() => handleView(item)}
+                    >
+                      <div className="flex gap-4">
+                        {/* 缩略图 */}
+                        <div className="flex gap-2 shrink-0">
+                          {item.referenceUrl ? (
+                            <img
+                              src={item.referenceUrl}
+                              alt="参考图"
+                              className="w-16 h-16 rounded-lg object-cover bg-gray-100"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
+                          <div className="flex items-center text-gray-300">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                          </div>
+                          {item.generatedUrl ? (
+                            <img
+                              src={item.generatedUrl}
+                              alt="生成图"
+                              className="w-16 h-16 rounded-lg object-cover bg-gray-100"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
-                        <img
-                          src={item.generatedUrl}
-                          alt="生成图"
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                      </div>
 
-                      {/* 信息 */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
-                          "{item.instruction}"
-                        </p>
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-                          <span>{formatTime(item.timestamp)}</span>
-                          <span>·</span>
-                          <span>{item.versionsCount} 个版本</span>
-                          <span>·</span>
-                          <span className="font-mono">¥{item.cost.toFixed(2)}</span>
+                        {/* 信息 */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">
+                            "{item.instruction}"
+                          </p>
+                          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                            <span>{formatTime(item.timestamp)}</span>
+                            <span>·</span>
+                            <span>{item.versionsCount} 个版本</span>
+                            <span>·</span>
+                            <span className="font-mono">¥{item.cost.toFixed(2)}</span>
+                            {item.status === 'failed' && (
+                              <>
+                                <span>·</span>
+                                <span className="text-red-500">失败</span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* 操作按钮 */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
-                          查看
-                        </button>
-                        <button className="px-3 py-1.5 text-sm text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors">
-                          再次编辑
-                        </button>
+                        {/* 操作按钮 */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={(e) => handleDelete(item.id, e)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="删除"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(item);
+                            }}
+                            className="px-3 py-1.5 text-sm text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                          >
+                            再次编辑
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-
-          {mockHistory.length === 0 && (
+            ))
+          ) : (
             <div className="flex flex-col items-center justify-center py-20">
               <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-gray-500">暂无设计历史</p>
               <p className="text-gray-400 text-sm mt-1">开始创建你的第一个设计吧</p>
+              <button
+                onClick={() => onNavigate?.('workspace')}
+                className="mt-4 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+              >
+                开始设计
+              </button>
             </div>
           )}
         </div>

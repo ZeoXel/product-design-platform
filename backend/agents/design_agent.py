@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 from services import claude_service, nano_banana_service
 from models import (
     AnalysisResult,
+    ImageAnalysis,
     GenerationResult,
     DesignResponse,
     AspectRatio,
@@ -43,16 +44,18 @@ class DesignAgent:
         self,
         image_base64: str,
         session_id: Optional[str] = None,
-    ) -> AnalysisResult:
+        include_similar: bool = True,
+    ) -> ImageAnalysis:
         """
         分析参考图
 
         Args:
             image_base64: 图像base64数据
             session_id: 会话ID
+            include_similar: 是否查找相似产品
 
         Returns:
-            分析结果
+            分析结果（包含相似产品）
         """
         session = self._get_session(session_id)
 
@@ -67,6 +70,38 @@ class DesignAgent:
 4. 评估设计的品质和独特性
 5. 提供可能的改进建议""",
         )
+
+        # 查找相似产品（用于市场参考和设计灵感）
+        if include_similar:
+            try:
+                from services.embedding_service import embedding_service
+                from services.gallery_service import gallery_service
+                from services.search_utils import generate_multimodal_search_description
+                from models import SimilarItem
+
+                # 使用标准化的详细描述生成查询向量
+                text_desc = generate_multimodal_search_description(analysis)
+                print(f"[Design Agent] Query description: {text_desc}")
+                query_embedding = await embedding_service.generate_embedding(
+                    image_base64=image_base64,
+                    text=text_desc
+                )
+
+                if query_embedding is not None:
+                    similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.3)
+
+                    # 添加相似产品到结果
+                    analysis.similarItems = [
+                        SimilarItem(
+                            id=item["id"],
+                            imageUrl=item["imageUrl"],
+                            similarity=item["similarity"]
+                        )
+                        for item in similar
+                    ]
+                    print(f"[Design Agent] Found {len(similar)} similar products")
+            except Exception as e:
+                print(f"[Design Agent] Failed to find similar items: {e}")
 
         # 保存到会话
         session["current_image"] = image_base64
@@ -97,18 +132,40 @@ class DesignAgent:
         """
         session = self._get_session(session_id)
         analysis = None
+        similar_items = None
 
         try:
-            # 步骤1: 如果有参考图，先分析
+            # 步骤1: 如果有参考图，先分析（包括查找相似产品）
             if reference_image:
                 analysis = await self.analyze_reference(reference_image, session["id"])
+                # 获取相似产品用于生成参考
+                similar_items = analysis.similarItems if hasattr(analysis, 'similarItems') and analysis.similarItems else None
             elif session.get("analysis"):
                 analysis = session["analysis"]
+                # 尝试从会话中获取相似产品
+                similar_items = getattr(analysis, 'similarItems', None) if analysis else None
 
-            # 步骤2: 生成优化的提示词
+            # 如果有相似产品，转换为可用格式
+            similar_for_prompt = None
+            if similar_items:
+                from services.gallery_service import gallery_service
+                similar_for_prompt = []
+                for sim_item in similar_items[:3]:  # 只使用前3个
+                    # 获取完整的产品信息
+                    full_item = gallery_service.get_reference(sim_item.id)
+                    if full_item:
+                        similar_for_prompt.append({
+                            "id": sim_item.id,
+                            "imageUrl": sim_item.imageUrl,
+                            "similarity": sim_item.similarity,
+                            "item": full_item
+                        })
+
+            # 步骤2: 生成优化的提示词（包含相似产品参考）
             design_prompt = await self.claude.generate_design_prompt(
                 user_instruction=instruction,
                 reference_analysis=analysis,
+                similar_items=similar_for_prompt,
             )
 
             # 步骤3: 调用Nano Banana生成图像
@@ -191,9 +248,15 @@ class DesignAgent:
 
         # 如果有当前设计分析，添加到上下文
         if session.get("analysis"):
+            analysis = session['analysis']
+            # 生成分析描述
+            primary_elements = ', '.join([e.type for e in analysis.elements.primary])
+            style_tags = ', '.join(analysis.style.tags)
+            description = f"主要元素: {primary_elements}; 风格: {style_tags} ({analysis.style.mood})"
+
             context_messages.append(ChatMessage(
                 role="assistant",
-                content=f"[当前设计分析]\n{session['analysis'].description}",
+                content=f"[当前设计分析]\n{description}",
             ))
 
         # 添加用户消息
@@ -210,7 +273,7 @@ class DesignAgent:
 
         return response
 
-    def _estimate_cost(self, analysis: Optional[AnalysisResult]) -> dict:
+    def _estimate_cost(self, analysis: Optional[ImageAnalysis]) -> dict:
         """
         估算生产成本
 
@@ -231,16 +294,20 @@ class DesignAgent:
             return base_cost
 
         # 根据元素数量调整
-        element_count = len(analysis.elements) if analysis.elements else 0
+        element_count = (
+            len(analysis.elements.primary) +
+            len(analysis.elements.secondary) +
+            len(analysis.elements.hardware)
+        )
         if element_count > 3:
             base_cost["material"] += (element_count - 3) * 1.5
             base_cost["labor"] += (element_count - 3) * 1.0
 
         # 根据风格调整
-        style = analysis.style.get("overall", "").lower() if analysis.style else ""
-        if "luxury" in style or "premium" in style:
+        style_tags = " ".join(analysis.style.tags).lower() if analysis.style.tags else ""
+        if "luxury" in style_tags or "premium" in style_tags or "高档" in style_tags:
             base_cost["material"] *= 1.5
-        elif "minimalist" in style or "simple" in style:
+        elif "minimalist" in style_tags or "simple" in style_tags or "简约" in style_tags:
             base_cost["material"] *= 0.8
 
         base_cost["total"] = base_cost["material"] + base_cost["labor"]

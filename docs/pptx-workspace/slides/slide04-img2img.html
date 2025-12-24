@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #F4F6F6; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #1C2833; padding: 18pt 40pt; display: flex; align-items: center;
+}
+.badge {
+  background: #BF9A4A; border-radius: 3pt; margin-right: 15pt;
+  padding: 4pt 10pt; display: flex; align-items: center;
+}
+.badge p { color: #1C2833; font-size: 10pt; font-weight: bold; margin: 0; }
+h1 { color: #FFFFFF; font-size: 22pt; margin: 0; }
+.content { padding: 20pt 40pt; flex: 1; display: flex; gap: 25pt; }
+.left { flex: 1; }
+.right { flex: 1; }
+.compare-title { color: #1C2833; font-size: 13pt; font-weight: bold; margin: 0 0 12pt 0; }
+.compare-table {
+  background: #FFFFFF; border-radius: 6pt; overflow: hidden;
+}
+.table-header {
+  display: flex; background: #2E4053;
+}
+.table-header p {
+  flex: 1; color: #FFFFFF; font-size: 9pt; padding: 8pt; margin: 0;
+  text-align: center; font-weight: bold;
+}
+.table-row { display: flex; border-bottom: 1pt solid #E5E5E5; }
+.table-row:last-child { border-bottom: none; }
+.table-cell {
+  flex: 1; padding: 8pt; font-size: 9pt; color: #2E4053;
+}
+.table-cell.label { font-weight: bold; }
+.table-cell-label { flex: 1; background: #F8F9FA; }
+.table-cell-label p { padding: 8pt; font-size: 9pt; color: #2E4053; font-weight: bold; margin: 0; }
+.bad { color: #E74C3C; }
+.good { color: #27AE60; }
+.flow-section { margin-top: 15pt; }
+.flow-title { color: #E74C3C; font-size: 11pt; font-weight: bold; margin: 0 0 8pt 0; }
+.flow-title.good-title { color: #27AE60; }
+.flow-box {
+  background: #FFFFFF; padding: 10pt 12pt; border-radius: 4pt;
+  border-left: 3pt solid #E74C3C;
+}
+.flow-box.good-flow { border-left-color: #27AE60; }
+.flow-box p { color: #2E4053; font-size: 9pt; margin: 0; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>核心优势 1</p></div>
+  <h1>图生图模式：以您的产品为起点</h1>
+</div>
+<div class="content">
+  <div class="left">
+    <p class="compare-title">图生图 vs 文生图 对比</p>
+    <div class="compare-table">
+      <div class="table-header">
+        <p>维度</p>
+        <p>文生图</p>
+        <p>图生图</p>
+      </div>
+      <div class="table-row">
+        <div class="table-cell-label"><p>物理准确性</p></div>
+        <p class="table-cell bad">依赖AI想象，常失真</p>
+        <p class="table-cell good">继承真实结构</p>
+      </div>
+      <div class="table-row">
+        <div class="table-cell-label"><p>可控性</p></div>
+        <p class="table-cell bad">粗粒度（整体风格）</p>
+        <p class="table-cell good">细粒度（单个元素）</p>
+      </div>
+      <div class="table-row">
+        <div class="table-cell-label"><p>迭代效率</p></div>
+        <p class="table-cell bad">不满意需完全重来</p>
+        <p class="table-cell good">渐进式精确修改</p>
+      </div>
+      <div class="table-row">
+        <div class="table-cell-label"><p>生产可行性</p></div>
+        <p class="table-cell bad">常常"做不出来"</p>
+        <p class="table-cell good">参考图本身可生产</p>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="flow-section">
+      <p class="flow-title">传统文生图流程</p>
+      <div class="flow-box">
+        <p>提示词 → AI生成 → 不满意 → 重写 → 再生成<br/>可能需要 20 次才满意</p>
+      </div>
+    </div>
+    <div class="flow-section" style="margin-top: 20pt;">
+      <p class="flow-title good-title">我们的图生图流程</p>
+      <div class="flow-box good-flow">
+        <p>选择参考图 → "把贝壳换成水晶" → 精确替换<br/>→ "再大一点" → 微调<br/>2-3 次迭代即满意</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

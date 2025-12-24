@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Header } from '../components/layout/Header';
 import { ImagePreview } from '../components/preview/ImagePreview';
 import { VersionBar } from '../components/preview/VersionBar';
@@ -8,6 +8,7 @@ import { ImageAnalysisPanel } from '../components/preview/ImageAnalysisPanel';
 import { CompatibilityWarning } from '../components/chat/CompatibilityWarning';
 import { CostPanelEnhanced } from '../components/cost/CostPanelEnhanced';
 import { GalleryDrawer } from '../components/gallery/GalleryDrawer';
+import { addHistoryItem, type HistoryItem } from '../services/historyService';
 import type {
   ChatMessage,
   ImageVersion,
@@ -20,9 +21,10 @@ import type {
 
 interface WorkspaceProps {
   onNavigate?: (page: 'workspace' | 'gallery' | 'history') => void;
+  historyItem?: HistoryItem | null;
 }
 
-export function Workspace({ onNavigate }: WorkspaceProps = {}) {
+export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const [currentPage, setCurrentPage] = useState<'workspace' | 'gallery' | 'history'>('workspace');
 
   const handleNavigate = (page: 'workspace' | 'gallery' | 'history') => {
@@ -59,15 +61,36 @@ export function Workspace({ onNavigate }: WorkspaceProps = {}) {
       .catch(() => setApiConnected(false));
   }, []);
 
+  // 从历史记录恢复
+  useEffect(() => {
+    if (historyItem) {
+      setReferenceImage(historyItem.referenceUrl);
+      setVersions(historyItem.versions || []);
+      setCurrentVersionId(historyItem.versions?.[historyItem.versions.length - 1]?.id || null);
+      setCostBreakdown(historyItem.costBreakdown || null);
+
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `已恢复历史记录：「${historyItem.instruction}」。你可以继续在此基础上进行修改。`,
+        timestamp: new Date(),
+        status: 'complete'
+      };
+      setMessages([systemMessage]);
+    }
+  }, [historyItem]);
+
   const handleUpload = useCallback(async (file: File) => {
     const url = URL.createObjectURL(file);
     setReferenceImage(url);
 
+    let base64: string = '';
     try {
-      const base64 = await fileToBase64(file);
+      base64 = await fileToBase64(file);
       setReferenceBase64(base64);
     } catch (e) {
       console.error('Failed to convert file to base64:', e);
+      return; // 如果转换失败，直接返回
     }
 
     const initialVersion: ImageVersion = {
@@ -79,50 +102,43 @@ export function Workspace({ onNavigate }: WorkspaceProps = {}) {
     setVersions([initialVersion]);
     setCurrentVersionId('v0');
 
+    // 调用真实的图像分析 API
     setGenerationStep('analyzing');
-    await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const mockAnalysis: ImageAnalysis = {
-      elements: {
-        primary: [
-          { type: '贝壳', color: '粉色' },
-          { type: '珍珠', color: '白色' }
-        ],
-        secondary: [
-          { type: '小珠子', count: 12 }
-        ],
-        hardware: [
-          { type: '龙虾扣', material: '合金' }
-        ]
-      },
-      style: {
-        tags: ['海洋风', '少女感', '夏日'],
-        mood: '清新浪漫'
-      },
-      physicalSpecs: {
-        lengthCm: 18,
-        weightG: 15
-      },
-      suggestions: [
-        '可尝试替换为水晶元素增加闪耀感',
-        '添加金属链条可提升质感'
-      ],
-      similarItems: [
-        { id: '1', imageUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=80&h=80&fit=crop', similarity: 92 },
-        { id: '2', imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=80&h=80&fit=crop', similarity: 85 }
-      ]
-    };
-    setImageAnalysis(mockAnalysis);
-    setGenerationStep('idle');
+    try {
+      const analysis = await api.analyzeImage({
+        image: base64,
+        include_similar: true,
+      });
 
-    const systemMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: '已分析参考图：检测到贝壳、珍珠等海洋风元素。请告诉我你想要的修改，例如：「把粉色贝壳换成蓝色水晶」或「增加星星装饰」。',
-      timestamp: new Date(),
-      status: 'complete'
-    };
-    setMessages([systemMessage]);
+      setImageAnalysis(analysis);
+      setGenerationStep('idle');
+
+      // 生成系统消息，基于实际分析结果
+      const primaryElements = analysis.elements.primary.map(el => el.type).join('、');
+      const styleTags = analysis.style.tags.join('、');
+
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `已分析参考图：检测到${primaryElements}等元素，风格为${styleTags}。${analysis.similarItems && analysis.similarItems.length > 0 ? `找到${analysis.similarItems.length}个相似产品。` : ''}请告诉我你想要的修改，例如：「替换主元素」或「调整配色」。`,
+        timestamp: new Date(),
+        status: 'complete'
+      };
+      setMessages([systemMessage]);
+    } catch (error) {
+      console.error('图像分析失败:', error);
+      setGenerationStep('idle');
+
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '抱歉，图像分析失败。请重新上传或稍后再试。',
+        timestamp: new Date(),
+        status: 'error'
+      };
+      setMessages([errorMessage]);
+    }
   }, []);
 
   const handleSendMessage = useCallback(async (content: string) => {
@@ -240,6 +256,20 @@ export function Workspace({ onNavigate }: WorkspaceProps = {}) {
           setGenerationStep('complete');
           setShowRating(true);
           setUserRating(undefined);
+
+          // 保存到历史记录
+          const updatedVersions = [...versions, newVersion];
+          addHistoryItem({
+            timestamp: new Date(),
+            instruction: content,
+            referenceUrl: referenceImage || '',
+            generatedUrl: result.image_url,
+            versions: updatedVersions,
+            versionsCount: updatedVersions.length,
+            status: 'success',
+            cost: mockCost.apiCost,
+            costBreakdown: mockCost,
+          });
 
           setMessages(prev => prev.map(msg =>
             msg.id === thinkingMessage.id
@@ -391,8 +421,8 @@ export function Workspace({ onNavigate }: WorkspaceProps = {}) {
                     isAnalyzing={generationStep === 'analyzing'}
                     similarItems={imageAnalysis.similarItems?.map(item => ({
                       id: item.id,
-                      url: item.imageUrl,
-                      similarity: item.similarity / 100
+                      url: item.imageUrl.startsWith('http') ? item.imageUrl : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8010'}${item.imageUrl}`,
+                      similarity: item.similarity
                     }))}
                   />
                 ) : (

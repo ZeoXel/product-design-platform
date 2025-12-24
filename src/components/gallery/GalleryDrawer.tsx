@@ -1,16 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ReferenceProduct } from '../../types';
-
-const mockProducts: ReferenceProduct[] = [
-  { id: '1', imageUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=200&h=200&fit=crop', elements: ['贝壳', '珍珠'], style: '海洋', salesTier: 'A' },
-  { id: '2', imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&h=200&fit=crop', elements: ['水晶', '金属'], style: '极简', salesTier: 'A' },
-  { id: '3', imageUrl: 'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=200&h=200&fit=crop', elements: ['编织', '珠子'], style: '波西米亚', salesTier: 'B' },
-  { id: '4', imageUrl: 'https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=200&h=200&fit=crop', elements: ['星月', '金属'], style: '复古', salesTier: 'A' },
-  { id: '5', imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=200&h=200&fit=crop', elements: ['宝石', '银饰'], style: '优雅', salesTier: 'B' },
-  { id: '6', imageUrl: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=200&h=200&fit=crop', elements: ['流苏', '珠子'], style: '民族', salesTier: 'C' },
-  { id: '7', imageUrl: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=200&h=200&fit=crop', elements: ['几何', '金属'], style: '现代', salesTier: 'A' },
-  { id: '8', imageUrl: 'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=200&h=200&fit=crop', elements: ['花朵', '珐琅'], style: '田园', salesTier: 'B' },
-];
+import { api } from '../../services/api';
 
 const categories = ['全部', '海洋', '极简', '复古', '现代'];
 
@@ -23,8 +13,42 @@ interface GalleryDrawerProps {
 export function GalleryDrawer({ isOpen, onClose, onSelect }: GalleryDrawerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
+  const [products, setProducts] = useState<ReferenceProduct[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const filteredProducts = mockProducts.filter(product => {
+  // 加载图库数据
+  useEffect(() => {
+    const loadGallery = async () => {
+      try {
+        setLoading(true);
+        const response = await api.listReferences({ limit: 100 });
+
+        // 转换 GalleryReference 到 ReferenceProduct 格式
+        const transformedProducts: ReferenceProduct[] = response.items.map(item => ({
+          id: item.id,
+          imageUrl: `/gallery/images/${item.filename}`,
+          elements: [
+            ...item.analysis.elements.primary.map(e => e.type),
+            ...item.analysis.elements.secondary.map(e => e.type),
+          ],
+          style: item.analysis.style.tags[0] || '未分类',
+          salesTier: (item as any).salesTier || 'B',
+        }));
+
+        setProducts(transformedProducts);
+      } catch (error) {
+        console.error('加载图库失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (isOpen) {
+      loadGallery();
+    }
+  }, [isOpen]);
+
+  const filteredProducts = products.filter(product => {
     const matchesSearch = searchQuery === '' ||
       product.elements.some(el => el.includes(searchQuery)) ||
       product.style.includes(searchQuery);
@@ -107,43 +131,47 @@ export function GalleryDrawer({ isOpen, onClose, onSelect }: GalleryDrawerProps)
 
         {/* 图片网格 */}
         <div className="flex-1 overflow-y-auto px-5 pb-20">
-          <div className="grid grid-cols-3 gap-2">
-            {filteredProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => {
-                  onSelect(product);
-                  onClose();
-                }}
-                className="group relative aspect-square rounded-xl overflow-hidden"
-              >
-                <img
-                  src={product.imageUrl}
-                  alt={product.style}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                {/* 销量标签 */}
-                {product.salesTier === 'A' && (
-                  <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-md">
-                    热销
-                  </span>
-                )}
-                {/* 悬浮遮罩 */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <span className="px-2 py-1 bg-white/90 rounded-lg text-xs font-medium text-gray-700">
-                    使用
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {filteredProducts.length === 0 && (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
               <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <p className="text-sm">未找到匹配的参考图</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filteredProducts.map((product) => (
+                <button
+                  key={product.id}
+                  onClick={() => {
+                    onSelect(product);
+                    onClose();
+                  }}
+                  className="group relative aspect-square rounded-xl overflow-hidden"
+                >
+                  <img
+                    src={product.imageUrl}
+                    alt={product.style}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  {/* 销量标签 */}
+                  {product.salesTier === 'A' && (
+                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-md">
+                      热销
+                    </span>
+                  )}
+                  {/* 悬浮遮罩 */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <span className="px-2 py-1 bg-white/90 rounded-lg text-xs font-medium text-gray-700">
+                      使用
+                    </span>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </div>

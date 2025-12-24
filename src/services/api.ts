@@ -11,6 +11,48 @@ export interface ChatMessage {
   content: string;
 }
 
+// 新的结构化分析结果格式
+export interface ImageAnalysis {
+  elements: {
+    primary: Array<{
+      type: string;
+      color?: string;
+      count?: number;
+      material?: string;
+      position?: string;
+    }>;
+    secondary: Array<{
+      type: string;
+      color?: string;
+      count?: number;
+      material?: string;
+      position?: string;
+    }>;
+    hardware: Array<{
+      type: string;
+      color?: string;
+      count?: number;
+      material?: string;
+      position?: string;
+    }>;
+  };
+  style: {
+    tags: string[];
+    mood: string;
+  };
+  physicalSpecs: {
+    lengthCm: number;
+    weightG: number;
+  };
+  suggestions: string[];
+  similarItems?: Array<{
+    id: string;
+    imageUrl: string;
+    similarity: number;
+  }>;
+}
+
+// 保留旧格式用于兼容
 export interface AnalysisResult {
   elements: Array<{
     type: string;
@@ -35,7 +77,7 @@ export interface GenerationResult {
 export interface DesignResponse {
   success: boolean;
   image_url?: string;
-  analysis?: AnalysisResult;
+  analysis?: ImageAnalysis;  // 使用新格式
   prompt_used?: string;
   message: string;
   cost_estimate?: {
@@ -44,6 +86,15 @@ export interface DesignResponse {
     total: number;
     currency: string;
   };
+}
+
+// 图库参考图
+export interface GalleryReference {
+  id: string;
+  filename: string;
+  uploadTime: string;
+  analysis: ImageAnalysis;
+  salesTier: 'A' | 'B' | 'C';
 }
 
 export interface ChatResponse {
@@ -111,13 +162,15 @@ export async function generateDesign(params: {
 }
 
 /**
- * 分析图像
+ * 分析图像（返回新的结构化格式）
  */
 export async function analyzeImage(params: {
   image: string;
   prompt?: string;
-}): Promise<AnalysisResult> {
-  return request('/analyze', {
+  include_similar?: boolean;
+}): Promise<ImageAnalysis> {
+  const url = `/analyze${params.include_similar !== false ? '?include_similar=true' : ''}`;
+  return request(url, {
     method: 'POST',
     body: JSON.stringify({
       image: params.image,
@@ -193,6 +246,91 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/**
+ * 上传参考图到图库
+ */
+export async function uploadReference(params: {
+  file: File;
+  salesTier?: 'A' | 'B' | 'C';
+}): Promise<{ success: boolean; reference: GalleryReference }> {
+  const formData = new FormData();
+  formData.append('image', params.file);
+  if (params.salesTier) {
+    formData.append('sales_tier', params.salesTier);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/gallery/references`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: '上传失败' }));
+    throw new Error(error.detail || '上传失败');
+  }
+
+  return response.json();
+}
+
+/**
+ * 列出图库参考图
+ */
+export async function listReferences(params?: {
+  style?: string;
+  salesTier?: 'A' | 'B' | 'C';
+  limit?: number;
+}): Promise<{ success: boolean; items: GalleryReference[]; total: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.style) searchParams.set('style', params.style);
+  if (params?.salesTier) searchParams.set('sales_tier', params.salesTier);
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+  const url = `/gallery/references${searchParams.toString() ? `?${searchParams}` : ''}`;
+  return request(url);
+}
+
+/**
+ * 获取参考图详情
+ */
+export async function getReference(refId: string): Promise<GalleryReference> {
+  return request(`/gallery/references/${refId}`);
+}
+
+/**
+ * 删除参考图
+ */
+export async function deleteReference(refId: string): Promise<{ success: boolean }> {
+  return request(`/gallery/references/${refId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 查找相似图片
+ */
+export async function findSimilar(params: {
+  image: string;  // base64
+  topK?: number;
+  threshold?: number;
+}): Promise<{
+  success: boolean;
+  similar: Array<{
+    id: string;
+    imageUrl: string;
+    similarity: number;
+    item: GalleryReference;
+  }>;
+}> {
+  return request('/gallery/similar', {
+    method: 'POST',
+    body: JSON.stringify({
+      image: params.image,
+      top_k: params.topK || 5,
+      threshold: params.threshold || 0.5,
+    }),
+  });
+}
+
 // 导出API对象
 export const api = {
   healthCheck,
@@ -202,6 +340,12 @@ export const api = {
   chat,
   getSessionVersions,
   fileToBase64,
+  // 图库管理
+  uploadReference,
+  listReferences,
+  getReference,
+  deleteReference,
+  findSimilar,
 };
 
 export default api;
