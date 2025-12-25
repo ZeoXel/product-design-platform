@@ -68,7 +68,7 @@ export function ImagePreview({
             />
           </svg>
         </div>
-        <p className="text-gray-400 text-sm mb-1">点击或拖拽上传</p>
+        <p className="text-gray-400 text-sm mb-1">点击或拖拽上传参考图</p>
         <p className="text-gray-300 text-xs">JPG / PNG</p>
 
         {onGalleryOpen && (
@@ -82,6 +82,13 @@ export function ImagePreview({
             从图库选择
           </button>
         )}
+
+        {/* 探索模式引导 */}
+        <div className="mt-6 pt-6 border-t border-gray-100 text-center">
+          <p className="text-gray-400 text-xs">
+            或直接与右侧 Agent 对话，探索新设计方向
+          </p>
+        </div>
       </div>
     );
   }

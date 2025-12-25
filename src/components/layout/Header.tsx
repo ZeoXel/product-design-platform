@@ -1,5 +1,3 @@
-
-
 interface HeaderProps {
   currentPage: 'workspace' | 'gallery' | 'history';
   onNavigate: (page: 'workspace' | 'gallery' | 'history') => void;

@@ -8,7 +8,7 @@ import { ImageAnalysisPanel } from '../components/preview/ImageAnalysisPanel';
 import { CompatibilityWarning } from '../components/chat/CompatibilityWarning';
 import { CostPanelEnhanced } from '../components/cost/CostPanelEnhanced';
 import { GalleryDrawer } from '../components/gallery/GalleryDrawer';
-import { addHistoryItem, type HistoryItem } from '../services/historyService';
+import { type HistoryItem } from '../services/historyService';
 import { detectStyleFromTags, getStyleInfo, type StyleKey } from '../components/style/StyleSelector';
 import type {
   ChatMessage,
@@ -18,6 +18,7 @@ import type {
   CompatibilityCheck,
   CostBreakdown,
   ReferenceProduct,
+  DesignCanvas,
 } from '../types';
 
 interface WorkspaceProps {
@@ -36,6 +37,10 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     }
   };
 
+  // 多画布管理
+  const [canvases, setCanvases] = useState<DesignCanvas[]>([]);
+  const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [versions, setVersions] = useState<ImageVersion[]>([]);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
@@ -51,11 +56,13 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const [compatibilityCheck, setCompatibilityCheck] = useState<CompatibilityCheck | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [isEstimatingCost, setIsEstimatingCost] = useState(false);
+  const [isEstimatingCost, _setIsEstimatingCost] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [userRating, setUserRating] = useState<number | undefined>();
   const [showRating, setShowRating] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<StyleKey | null>(null);
+  const [isBlankMode, setIsBlankMode] = useState(false);  // 空白模式，用于文生图
+  const [isChatting, setIsChatting] = useState(false);  // Agent 对话中（区别于图片生成）
 
   // 当前版本的分析结果（优先使用版本自带的分析，否则使用全局分析）
   const currentAnalysis = useMemo(() => {
@@ -163,6 +170,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     }
   }, []);
 
+  // 对话模式：调用 chat API 进行对话，不直接生图
   const handleSendMessage = useCallback(async (content: string) => {
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -182,170 +190,61 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     };
     setMessages(prev => [...prev, thinkingMessage]);
 
-    setIsGenerating(true);
-    setProgress(0);
-    setShowRating(false);
-    setUserRating(undefined);
-    setCompatibilityCheck(null);
-    setGenerationError(undefined);
+    setIsChatting(true);  // 使用 isChatting 而非 isGenerating
 
-    const simulateWorkflow = async () => {
-      setGenerationStep('analyzing');
-      await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      // 调用对话 API
+      const chatMessages = [...messages, userMessage].map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
 
-      setGenerationStep('searching');
-      await new Promise(resolve => setTimeout(resolve, 600));
+      const result = await api.chat({
+        messages: chatMessages,
+        session_id: sessionId || undefined,
+      });
 
-      setGenerationStep('checking');
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      if (Math.random() < 0.2) {
-        const mockCheck: CompatibilityCheck = {
-          compatible: true,
-          score: 65,
-          targetElement: content.match(/换成(.+?)(?:$|，|。)/)?.[1] || '新元素',
-          existingElements: ['贝壳', '珍珠'],
-          warnings: ['该元素组合在历史数据中出现较少', '建议进行小批量测试'],
-          alternatives: [
-            { element: '水晶珠', score: 88 },
-            { element: '玻璃珠', score: 82 }
-          ]
-        };
-        setCompatibilityCheck(mockCheck);
-        await new Promise(resolve => setTimeout(resolve, 100));
+      if (!sessionId && result.session_id) {
+        setSessionId(result.session_id);
       }
-      setCompatibilityCheck(null);
 
-      setGenerationStep('generating');
-      setProgress(0);
+      // 更新 thinking 消息为 Agent 回复
+      const assistantMessage: ChatMessage = {
+        ...thinkingMessage,
+        content: result.message,
+        status: 'complete' as const,
+      };
 
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(progressInterval);
-            return 95;
-          }
-          return prev + Math.random() * 15;
-        });
-      }, 300);
+      setMessages(prev => prev.map(msg =>
+        msg.id === thinkingMessage.id ? assistantMessage : msg
+      ));
 
-      try {
-        // 使用自然语言模式的设计生成
-        const result = await api.generateDesign({
-          instruction: content,
-          reference_image: referenceBase64 || undefined,
-          session_id: sessionId || undefined,
-          style_hint: activeStyle || undefined,
-        });
-
-        clearInterval(progressInterval);
-        setProgress(100);
-
-        if (result.success && result.image_url) {
-          if (!sessionId) {
-            setSessionId(Date.now().toString());
-          }
-
-          // 创建新版本，包含生成结果的分析
-          const newVersion: ImageVersion = {
-            id: `v${versions.length}`,
-            url: result.image_url,
-            timestamp: new Date(),
-            instruction: content,
-            analysis: result.analysis,  // 保存版本对应的分析结果
-          };
-
-          setVersions(prev => [...prev, newVersion]);
-          setCurrentVersionId(newVersion.id);
-
-          // 更新全局分析状态（用于兼容）
-          if (result.analysis) {
-            setImageAnalysis(result.analysis);
-          }
-
-          setIsEstimatingCost(true);
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          const mockCost: CostBreakdown = {
-            materials: [
-              { name: '主材料', quantity: 1, unitPrice: 8.5, total: 8.5 },
-              { name: '配件', quantity: 3, unitPrice: 1.2, total: 3.6 },
-              { name: '五金', quantity: 1, unitPrice: 2.0, total: 2.0 }
-            ],
-            labor: {
-              timeMinutes: 25,
-              hourlyRate: 30,
-              total: 12.5
-            },
-            apiCost: 0.15,
-            totalCost: 26.75,
-            currency: 'CNY'
-          };
-          setCostBreakdown(mockCost);
-          setIsEstimatingCost(false);
-
-          setGenerationStep('complete');
-          setShowRating(true);
-          setUserRating(undefined);
-
-          // 保存到历史记录
-          const updatedVersions = [...versions, newVersion];
-          addHistoryItem({
-            timestamp: new Date(),
-            instruction: content,
-            referenceUrl: referenceImage || '',
-            generatedUrl: result.image_url,
-            versions: updatedVersions,
-            versionsCount: updatedVersions.length,
-            status: 'success',
-            cost: mockCost.apiCost,
-            costBreakdown: mockCost,
-          });
-
-          setMessages(prev => prev.map(msg =>
-            msg.id === thinkingMessage.id
-              ? {
-                ...msg,
-                content: `已完成「${content}」的修改。\n\n你可以继续调整，或点击「导出」保存设计。`,
-                status: 'complete' as const
-              }
-              : msg
-          ));
-        } else {
-          setGenerationStep('error');
-          setGenerationError(result.message);
-          setMessages(prev => prev.map(msg =>
-            msg.id === thinkingMessage.id
-              ? {
-                ...msg,
-                content: `抱歉，生成失败：${result.message}。请稍后重试。`,
-                status: 'complete' as const
-              }
-              : msg
-          ));
-        }
-      } catch (error) {
-        clearInterval(progressInterval);
-        setGenerationStep('error');
-        setGenerationError(error instanceof Error ? error.message : '未知错误');
-        setMessages(prev => prev.map(msg =>
-          msg.id === thinkingMessage.id
-            ? {
-              ...msg,
-              content: `抱歉，发生错误：${error instanceof Error ? error.message : '未知错误'}。请检查网络连接后重试。`,
-              status: 'complete' as const
-            }
-            : msg
+      // 如果当前有选中的版本，更新该版本的对话快照
+      if (currentVersionId && !isBlankMode) {
+        const updatedMessages = [...messages, userMessage, assistantMessage];
+        setVersions(prev => prev.map(v =>
+          v.id === currentVersionId ? { ...v, messagesSnapshot: updatedMessages } : v
         ));
       }
-    };
 
-    await simulateWorkflow();
-    setIsGenerating(false);
-    setProgress(0);
-  }, [versions, referenceBase64, sessionId, activeStyle, referenceImage]);
+    } catch (error) {
+      console.error('对话失败:', error);
+      setMessages(prev => prev.map(msg =>
+        msg.id === thinkingMessage.id
+          ? {
+            ...msg,
+            content: `抱歉，对话失败：${error instanceof Error ? error.message : '未知错误'}`,
+            status: 'error' as const
+          }
+          : msg
+      ));
+    } finally {
+      setIsChatting(false);
+    }
+  }, [messages, sessionId, currentVersionId, isBlankMode]);
 
-  const currentVersion = versions.find(v => v.id === currentVersionId) || null;
+  // 空白模式时不显示任何版本
+  const currentVersion = isBlankMode ? null : (versions.find(v => v.id === currentVersionId) || null);
 
   const handleGallerySelect = useCallback(async (product: ReferenceProduct) => {
     setReferenceImage(product.imageUrl);
@@ -415,6 +314,285 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setCompatibilityCheck(null);
   }, []);
 
+  // 保存当前画布状态到 canvases 数组
+  const saveCurrentCanvas = useCallback(() => {
+    if (currentCanvasId && (versions.length > 0 || referenceImage)) {
+      setCanvases(prev => prev.map(c =>
+        c.id === currentCanvasId
+          ? {
+              ...c,
+              versions,
+              currentVersionId,
+              referenceImage,
+              referenceBase64,
+              messages,
+              analysis: imageAnalysis,
+            }
+          : c
+      ));
+    }
+  }, [currentCanvasId, versions, currentVersionId, referenceImage, referenceBase64, messages, imageAnalysis]);
+
+  // 创建新画布
+  const handleCreateCanvas = useCallback(() => {
+    // 先保存当前画布状态
+    if (currentCanvasId) {
+      saveCurrentCanvas();
+    } else if (versions.length > 0 || referenceImage) {
+      // 如果当前没有画布ID但有内容，先创建一个画布保存当前内容
+      const firstCanvas: DesignCanvas = {
+        id: `canvas-${Date.now() - 1}`,
+        name: '画布 1',
+        createdAt: new Date(),
+        versions,
+        currentVersionId,
+        referenceImage,
+        referenceBase64,
+        messages,
+        analysis: imageAnalysis,
+      };
+      setCanvases(prev => [...prev, firstCanvas]);
+    }
+
+    // 创建新的空白画布
+    const newCanvas: DesignCanvas = {
+      id: `canvas-${Date.now()}`,
+      name: `画布 ${canvases.length + (versions.length > 0 || referenceImage ? 2 : 1)}`,
+      createdAt: new Date(),
+      versions: [],
+      currentVersionId: null,
+      referenceImage: null,
+      referenceBase64: null,
+      messages: [],
+      analysis: null,
+    };
+
+    setCanvases(prev => [...prev, newCanvas]);
+    setCurrentCanvasId(newCanvas.id);
+
+    // 清空当前工作状态
+    setReferenceImage(null);
+    setReferenceBase64(null);
+    setVersions([]);
+    setCurrentVersionId(null);
+    setImageAnalysis(null);
+    setMessages([]);
+    setCompatibilityCheck(null);
+    setCostBreakdown(null);
+    setGenerationStep('idle');
+    setGenerationError(undefined);
+    setUserRating(undefined);
+    setShowRating(false);
+    setSelectedStyle(null);
+  }, [currentCanvasId, canvases.length, versions, currentVersionId, referenceImage, referenceBase64, messages, imageAnalysis, saveCurrentCanvas]);
+
+  // 切换画布
+  const handleSelectCanvas = useCallback((canvasId: string) => {
+    if (canvasId === currentCanvasId) return;
+
+    // 保存当前画布状态
+    saveCurrentCanvas();
+
+    // 加载目标画布状态
+    const targetCanvas = canvases.find(c => c.id === canvasId);
+    if (targetCanvas) {
+      setCurrentCanvasId(canvasId);
+      setVersions(targetCanvas.versions);
+      setCurrentVersionId(targetCanvas.currentVersionId);
+      setReferenceImage(targetCanvas.referenceImage);
+      setReferenceBase64(targetCanvas.referenceBase64);
+      setMessages(targetCanvas.messages);
+      setImageAnalysis(targetCanvas.analysis);
+      // 重置其他状态
+      setCompatibilityCheck(null);
+      setCostBreakdown(null);
+      setGenerationStep('idle');
+      setGenerationError(undefined);
+      setUserRating(undefined);
+      setShowRating(false);
+    }
+  }, [currentCanvasId, canvases, saveCurrentCanvas]);
+
+  // 创建空白版本（进入文生图模式，但保留版本历史）
+  const handleCreateBlankVersion = useCallback(() => {
+    setIsBlankMode(true);
+    setCurrentVersionId(null);
+    setImageAnalysis(null);
+    setCompatibilityCheck(null);
+    setCostBreakdown(null);
+    setGenerationStep('idle');
+    setGenerationError(undefined);
+    setShowRating(false);
+    // 注意：不清空 versions，保留版本历史
+  }, []);
+
+  // 选择版本（退出空白模式，恢复该版本的对话历史）
+  const handleSelectVersion = useCallback((versionId: string) => {
+    setIsBlankMode(false);
+    setCurrentVersionId(versionId);
+
+    // 恢复该版本的对话历史快照
+    const targetVersion = versions.find(v => v.id === versionId);
+    if (targetVersion?.messagesSnapshot) {
+      setMessages(targetVersion.messagesSnapshot);
+    }
+    // 恢复该版本的分析结果
+    if (targetVersion?.analysis) {
+      setImageAnalysis(targetVersion.analysis);
+    }
+  }, [versions]);
+
+  // 删除版本
+  const handleDeleteVersion = useCallback((versionId: string) => {
+    setVersions(prev => {
+      const newVersions = prev.filter(v => v.id !== versionId);
+      // 如果删除的是当前版本，切换到最后一个版本或进入空白模式
+      if (currentVersionId === versionId) {
+        if (newVersions.length > 0) {
+          setCurrentVersionId(newVersions[newVersions.length - 1].id);
+          setIsBlankMode(false);
+        } else {
+          setCurrentVersionId(null);
+          setIsBlankMode(true);
+        }
+      }
+      return newVersions;
+    });
+  }, [currentVersionId]);
+
+  // 直接文生图（不经过 Agent 对话）
+  const handleDirectGenerate = useCallback(async (prompt: string) => {
+    // 添加用户消息
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `[直接生图] ${prompt}`,
+      timestamp: new Date(),
+      status: 'complete'
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    setIsGenerating(true);
+    setProgress(0);
+    setShowRating(false);
+    setGenerationStep('generating');
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 95) {
+          clearInterval(progressInterval);
+          return 95;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 300);
+
+    try {
+      // 直接调用文生图 API（无参考图）
+      const result = await api.generateDesign({
+        instruction: prompt,
+        reference_image: referenceBase64 || undefined,
+        session_id: sessionId || undefined,
+        style_hint: activeStyle || undefined,
+      });
+
+      clearInterval(progressInterval);
+      setProgress(100);
+
+      if (result.success && result.image_url) {
+        if (!sessionId) {
+          setSessionId(Date.now().toString());
+        }
+
+        // 创建新版本（稍后会更新对话快照）
+        const newVersionId = `v${versions.length}`;
+        const newVersion: ImageVersion = {
+          id: newVersionId,
+          url: result.image_url,
+          timestamp: new Date(),
+          instruction: prompt,
+          analysis: result.analysis,
+          messagesSnapshot: [...messages, userMessage],  // 先保存当前对话
+        };
+
+        setVersions(prev => [...prev, newVersion]);
+        setCurrentVersionId(newVersion.id);
+        setIsBlankMode(false);  // 退出空白模式
+
+        // 如果生成结果没有附带分析，则主动调用分析 API
+        if (!result.analysis) {
+          setGenerationStep('analyzing');
+          try {
+            // 先尝试获取图片的 base64
+            let imageBase64: string;
+            try {
+              imageBase64 = await urlToBase64(result.image_url);
+            } catch (urlError) {
+              console.error('图片转换失败，尝试直接使用URL:', urlError);
+              // 如果 URL 是相对路径，尝试补全
+              const fullUrl = result.image_url.startsWith('http')
+                ? result.image_url
+                : `${window.location.origin}${result.image_url}`;
+              imageBase64 = await urlToBase64(fullUrl);
+            }
+
+            const analysisResult = await api.analyzeImage({
+              image: imageBase64,
+              include_similar: true,
+            });
+            setImageAnalysis(analysisResult);
+            // 更新版本的分析结果
+            setVersions(prev => prev.map(v =>
+              v.id === newVersion.id ? { ...v, analysis: analysisResult } : v
+            ));
+          } catch (analysisError) {
+            console.error('图像分析失败:', analysisError);
+            // 即使分析失败也继续，不阻塞用户操作
+          }
+        } else {
+          setImageAnalysis(result.analysis);
+        }
+
+        // 添加成功消息（不在对话框显示图片，图片仅在左侧预览区展示）
+        const successMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '✓ 设计已生成，请在左侧查看。你可以继续描述修改意见。',
+          timestamp: new Date(),
+          status: 'complete',
+        };
+        const updatedMessages = [...messages, userMessage, successMessage];
+        setMessages(updatedMessages);
+
+        // 更新版本的对话快照（包含成功消息）
+        setVersions(prev => prev.map(v =>
+          v.id === newVersionId ? { ...v, messagesSnapshot: updatedMessages } : v
+        ));
+
+        setGenerationStep('complete');
+        setShowRating(true);
+      } else {
+        throw new Error(result.message || '生成失败');
+      }
+    } catch (error) {
+      clearInterval(progressInterval);
+      console.error('直接生图失败:', error);
+      setGenerationStep('error');
+      setGenerationError(error instanceof Error ? error.message : '生成失败');
+
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `生成失败：${error instanceof Error ? error.message : '未知错误'}`,
+        timestamp: new Date(),
+        status: 'error'
+      };
+      setMessages(prev => prev.filter(m => m.status !== 'thinking').concat(errorMessage));
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [referenceBase64, sessionId, activeStyle, versions]);
+
   return (
     <div className="h-screen flex flex-col bg-gradient-mesh">
       <Header currentPage={currentPage} onNavigate={handleNavigate} />
@@ -436,13 +614,20 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
               />
 
               {/* 底部悬浮栏 */}
-              {(versions.length > 0 || generationStep !== 'idle') && (
+              {(versions.length > 0 || canvases.length > 0 || generationStep !== 'idle') && (
                 <div className="absolute bottom-4 left-4 right-4">
                   <div className="glass-subtle rounded-xl px-4 h-12 flex items-center">
                     <VersionBar
+                      canvases={canvases}
+                      currentCanvasId={currentCanvasId || undefined}
+                      onSelectCanvas={handleSelectCanvas}
+                      onCreateCanvas={handleCreateCanvas}
                       versions={versions}
                       currentId={currentVersionId}
-                      onSelect={setCurrentVersionId}
+                      onSelect={handleSelectVersion}
+                      onDelete={handleDeleteVersion}
+                      onCreateBlankVersion={handleCreateBlankVersion}
+                      isBlankMode={isBlankMode}
                       generationStep={generationStep}
                       error={generationError}
                       showRating={showRating}
@@ -522,7 +707,9 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
               <ChatPanel
                 messages={messages}
                 onSendMessage={handleSendMessage}
+                onDirectGenerate={handleDirectGenerate}
                 isProcessing={isGenerating}
+                isChatting={isChatting}
               />
             </div>
           </div>

@@ -15,6 +15,7 @@ export interface ImageVersion {
   timestamp: Date;
   instruction: string;
   analysis?: ImageAnalysis;  // 每个版本对应的分析结果
+  messagesSnapshot?: ChatMessage[];  // 生成该版本时的对话历史快照
 }
 
 // 成本明细
@@ -209,5 +210,45 @@ export interface DesignResponseV2 {
   session_id: string;  // 后端返回的会话ID，用于后续请求
   message?: string;
   cost_estimate?: Record<string, unknown>;
+}
+
+// ==================== 画布与版本管理 ====================
+
+// 设计画布（每个画布包含自己的版本列表）
+export interface DesignCanvas {
+  id: string;
+  name: string;
+  createdAt: Date;
+  versions: ImageVersion[];
+  currentVersionId: string | null;
+  referenceImage: string | null;
+  referenceBase64: string | null;
+  messages: ChatMessage[];
+  analysis: ImageAnalysis | null;
+}
+
+// ==================== 探索模式类型 ====================
+
+// 工作模式
+export type WorkMode = 'refine' | 'explore';
+
+// 探索模式 - 种子项
+export interface SeedItem {
+  id: string;
+  imageUrl: string;
+  style: string;
+  styleName: string;
+  salesTier: 'A' | 'B' | 'C';
+  similarity: number;
+  tags: string[];
+}
+
+// 探索模式 - 发散分支
+export interface ExplorationBranch {
+  id: string;
+  seedId: string;
+  imageUrl: string;
+  prompt: string;
+  timestamp: Date;
 }
 
