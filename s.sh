@@ -39,10 +39,13 @@ echo -e "\n${BLUE}🔍 检查端口状态...${NC}"
 check_port 8010 "后端API"
 check_port 3010 "前端"
 
+# 创建日志目录
+mkdir -p logs
+
 # 启动后端
 echo -e "\n${BLUE}📦 启动后端服务...${NC}"
 cd backend
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8010 --reload > ../logs/backend.log 2>&1 &
+./venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8010 --reload > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}✅ 后端启动中 (PID: $BACKEND_PID)${NC}"
 cd ..

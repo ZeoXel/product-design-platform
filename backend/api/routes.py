@@ -8,13 +8,10 @@ from typing import Optional
 
 from models import (
     GenerateRequest,
-    GenerateRequestV2,
     ChatRequest,
     ImageAnalyzeRequest,
-    ImageGenerateRequest,
     SimilarSearchRequest,
     DesignResponse,
-    DesignResponseV2,
     ChatResponse,
     AnalysisResult,
     ImageAnalysis,
@@ -24,7 +21,7 @@ from models import (
     DesignPreset,
 )
 from agents import design_agent
-from services import claude_service, nano_banana_service, gallery_service, embedding_service, preset_service
+from services import claude_service, seedream_service, gallery_service, embedding_service, preset_service
 
 router = APIRouter(prefix="/api/v1", tags=["Design API"])
 
@@ -36,17 +33,14 @@ async def generate_design(request: GenerateRequest):
     """
     主设计生成接口
 
-    根据用户指令和可选的参考图生成挂饰设计
-    支持 style_hint 参数来引导生成风格
+    根据用户指令和可选的参考图生成挂饰设计（自然语言模式）
     """
     try:
         result = await design_agent.generate_design(
             instruction=request.instruction,
             reference_image=request.reference_image,
             session_id=request.session_id,
-            aspect_ratio=request.aspect_ratio,
             image_size=request.image_size,
-            style_hint=request.style_hint.value if request.style_hint else None,
         )
         return result
     except Exception as e:
@@ -72,33 +66,6 @@ async def generate_design_with_upload(
             instruction=instruction,
             reference_image=image_base64,
             session_id=session_id,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/generate/v2", response_model=DesignResponseV2)
-async def generate_design_v2(request: GenerateRequestV2):
-    """
-    V2 设计生成接口（分层Prompt + 预设系统）
-
-    新特性:
-    - 分层Prompt结构（6层）
-    - 产品类型预设
-    - 风格预设
-    - 向量检索可选
-    - 返回完整的Prompt层级信息
-    """
-    try:
-        result = await design_agent.generate_design_v2(
-            instruction=request.instruction,
-            reference_image=request.reference_image,
-            session_id=request.session_id,
-            product_type=request.product_type,
-            style_key=request.style_key,
-            include_similar=request.include_similar,
-            image_size=request.image_size,
         )
         return result
     except Exception as e:
@@ -243,18 +210,21 @@ async def analyze_image_upload(
 # ==================== 图像生成 ====================
 
 @router.post("/image/generate", response_model=GenerationResult)
-async def generate_image(request: ImageGenerateRequest):
+async def generate_image(
+    prompt: str,
+    reference_images: Optional[list] = None,
+    size: str = "2K",
+):
     """
     直接生成图像
 
-    使用Nano Banana根据提示词生成图像
+    使用 Seedream 根据提示词生成图像
     """
     try:
-        result = await nano_banana_service.generate(
-            prompt=request.prompt,
-            reference_images=request.reference_images,
-            aspect_ratio=request.aspect_ratio,
-            image_size=request.image_size,
+        result = await seedream_service.generate(
+            prompt=prompt,
+            reference_images=reference_images,
+            size=size,
         )
         return result
     except Exception as e:

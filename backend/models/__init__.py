@@ -19,21 +19,15 @@ from .schemas import (
     ChatResponse,
     DesignResponse,
     ErrorResponse,
-    # 新增：产品类型和结构类型枚举
+    # 产品类型和结构类型枚举
     ProductType,
     StructureType,
-    # 新增：分层Prompt模型
-    PromptLayer,
-    LayeredPrompt,
-    # 新增：预设模型
+    # 预设模型
     ColorPalette,
     ProductTypePreset,
     StylePreset,
     DesignPreset,
     PresetListResponse,
-    # 新增：增强版请求响应
-    GenerateRequestV2,
-    DesignResponseV2,
 )
 
 __all__ = [
@@ -57,16 +51,11 @@ __all__ = [
     "ChatResponse",
     "DesignResponse",
     "ErrorResponse",
-    # 新增
     "ProductType",
     "StructureType",
-    "PromptLayer",
-    "LayeredPrompt",
     "ColorPalette",
     "ProductTypePreset",
     "StylePreset",
     "DesignPreset",
     "PresetListResponse",
-    "GenerateRequestV2",
-    "DesignResponseV2",
 ]
