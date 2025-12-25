@@ -3,15 +3,13 @@ import { Header } from '../components/layout/Header';
 import { ImagePreview } from '../components/preview/ImagePreview';
 import { VersionBar } from '../components/preview/VersionBar';
 import { ChatPanel } from '../components/chat/ChatPanel';
-import { api, fileToBase64, generateDesignV2 } from '../services/api';
+import { api, fileToBase64, urlToBase64 } from '../services/api';
 import { ImageAnalysisPanel } from '../components/preview/ImageAnalysisPanel';
 import { CompatibilityWarning } from '../components/chat/CompatibilityWarning';
 import { CostPanelEnhanced } from '../components/cost/CostPanelEnhanced';
 import { GalleryDrawer } from '../components/gallery/GalleryDrawer';
 import { addHistoryItem, type HistoryItem } from '../services/historyService';
-import { detectStyleFromTags, getStyleInfo } from '../components/style/StyleSelector';
-import { PresetSelector } from '../components/style/PresetSelector';
-import { PromptPreview } from '../components/preview/PromptPreview';
+import { detectStyleFromTags, getStyleInfo, type StyleKey } from '../components/style/StyleSelector';
 import type {
   ChatMessage,
   ImageVersion,
@@ -20,9 +18,6 @@ import type {
   CompatibilityCheck,
   CostBreakdown,
   ReferenceProduct,
-  ProductType,
-  StyleKey,
-  LayeredPrompt,
 } from '../types';
 
 interface WorkspaceProps {
@@ -61,13 +56,6 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const [userRating, setUserRating] = useState<number | undefined>();
   const [showRating, setShowRating] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<StyleKey | null>(null);
-
-  // V2 预设系统状态
-  const [selectedProductType, setSelectedProductType] = useState<ProductType>('keychain');
-  const [selectedStyleKey, setSelectedStyleKey] = useState<StyleKey>('ocean_kawaii');
-  const [layeredPrompt, setLayeredPrompt] = useState<LayeredPrompt | null>(null);
-  const [showPresetSelector, setShowPresetSelector] = useState(false);
-  const [showPromptPreview, setShowPromptPreview] = useState(false);
 
   // 当前版本的分析结果（优先使用版本自带的分析，否则使用全局分析）
   const currentAnalysis = useMemo(() => {
@@ -242,29 +230,20 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       }, 300);
 
       try {
-        // 使用 V2 API（分层Prompt + 预设系统）
-        const result = await generateDesignV2({
+        // 使用自然语言模式的设计生成
+        const result = await api.generateDesign({
           instruction: content,
           reference_image: referenceBase64 || undefined,
           session_id: sessionId || undefined,
-          product_type: selectedProductType,
-          style_key: selectedStyleKey,
-          include_similar: false,  // 向量检索解耦，默认关闭
-          image_size: '2K',
+          style_hint: activeStyle || undefined,
         });
 
         clearInterval(progressInterval);
         setProgress(100);
 
         if (result.success && result.image_url) {
-          // 保存分层Prompt信息
-          if (result.layered_prompt) {
-            setLayeredPrompt(result.layered_prompt);
-            setShowPromptPreview(true);
-          }
-          // 使用后端返回的 session_id
-          if (result.session_id) {
-            setSessionId(result.session_id);
+          if (!sessionId) {
+            setSessionId(Date.now().toString());
           }
 
           // 创建新版本，包含生成结果的分析
@@ -364,13 +343,24 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     await simulateWorkflow();
     setIsGenerating(false);
     setProgress(0);
-  }, [versions, referenceBase64, sessionId, activeStyle, referenceImage, selectedProductType, selectedStyleKey]);
+  }, [versions, referenceBase64, sessionId, activeStyle, referenceImage]);
 
   const currentVersion = versions.find(v => v.id === currentVersionId) || null;
 
-  const handleGallerySelect = useCallback((product: ReferenceProduct) => {
+  const handleGallerySelect = useCallback(async (product: ReferenceProduct) => {
     setReferenceImage(product.imageUrl);
-    setReferenceBase64(null);
+    setGenerationStep('analyzing');
+
+    // 将图库图片 URL 转换为 base64，以便后续图生图使用
+    try {
+      const base64 = await urlToBase64(product.imageUrl);
+      setReferenceBase64(base64);
+      console.log('[Workspace] 图库图片已转换为 base64');
+    } catch (error) {
+      console.error('[Workspace] 图库图片转换失败:', error);
+      // 转换失败时仍继续，但后续图生图可能使用 URL
+      setReferenceBase64(null);
+    }
 
     const mockAnalysis: ImageAnalysis = {
       elements: {
@@ -399,6 +389,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setVersions([initialVersion]);
     setCurrentVersionId('v0');
     setImageAnalysis(mockAnalysis);
+    setGenerationStep('idle');
 
     const systemMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -420,7 +411,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setGenerationStep('idle');
   }, []);
 
-  const handleCompatibilityAlternative = useCallback((element: string) => {
+  const handleCompatibilityAlternative = useCallback((_element: string) => {
     setCompatibilityCheck(null);
   }, []);
 
@@ -468,55 +459,6 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
           <div className="flex-1 min-w-0 relative">
             <div className="h-full glass rounded-3xl overflow-hidden">
               <div className="h-full overflow-y-auto no-scrollbar p-4 pb-20 space-y-4">
-                {/* 预设选择器 */}
-                <div className="bg-white/80 rounded-xl border border-gray-200 overflow-hidden">
-                  <button
-                    onClick={() => setShowPresetSelector(!showPresetSelector)}
-                    className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">⚙️</span>
-                      <span className="text-sm font-medium text-gray-700">设计预设</span>
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">
-                        {selectedProductType}
-                      </span>
-                      <span className="px-2 py-0.5 bg-primary-100 text-primary-600 text-xs rounded-full">
-                        {selectedStyleKey}
-                      </span>
-                    </div>
-                    <svg
-                      className={`w-5 h-5 text-gray-400 transition-transform ${showPresetSelector ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {showPresetSelector && (
-                    <div className="p-4">
-                      <PresetSelector
-                        selectedProductType={selectedProductType}
-                        selectedStyle={selectedStyleKey}
-                        onProductTypeChange={setSelectedProductType}
-                        onStyleChange={setSelectedStyleKey}
-                        compact={false}
-                        showDescription={true}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* 分层Prompt预览 */}
-                {layeredPrompt && (
-                  <PromptPreview
-                    layeredPrompt={layeredPrompt}
-                    showFullPrompt={false}
-                    collapsible={true}
-                    defaultExpanded={showPromptPreview}
-                  />
-                )}
-
                 {/* 图像分析面板 */}
                 {currentAnalysis ? (
                   <ImageAnalysisPanel

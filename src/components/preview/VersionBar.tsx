@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { ImageVersion, GenerationStep } from '../../types';
 
 const stepLabels: Record<GenerationStep, string> = {

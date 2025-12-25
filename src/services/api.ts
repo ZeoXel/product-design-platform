@@ -5,7 +5,6 @@
 import type {
   ProductType,
   StyleKey,
-  LayeredPrompt,
   DesignPreset,
   PresetListResponse,
   ProductTypePreset,
@@ -271,6 +270,31 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 /**
+ * 将图片 URL 转换为 base64
+ * 用于图库选择后的图生图场景
+ */
+export async function urlToBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // 移除 data:image/xxx;base64, 前缀
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('[urlToBase64] Failed to convert URL to base64:', error);
+    throw error;
+  }
+}
+
+/**
  * 上传参考图到图库
  */
 export async function uploadReference(params: {
@@ -430,6 +454,7 @@ export const api = {
   chat,
   getSessionVersions,
   fileToBase64,
+  urlToBase64,
   // 图库管理
   uploadReference,
   listReferences,

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { CostBreakdown } from '../../types';
 
 interface CostPanelProps {

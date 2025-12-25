@@ -1,7 +1,11 @@
 """
 Claude AI 服务
 使用 Anthropic 官方 API 格式
-支持分层Prompt生成和垂类约束
+
+设计理念：
+- 自然语言优先：nano-banana-2/seedream4.5 以自然语言训练，不需要复杂模板约束
+- Agent 角色：意图识别 + 自然语言描述补全，辅助创作而非强约束
+- 图生图原生：保持模型原生的图像参考能力
 """
 import httpx
 import json
@@ -669,7 +673,79 @@ class ClaudeService:
         print(f"[Prompt Generation] Final prompt: {generated_prompt[:100]}...")
         return generated_prompt
 
-    # ==================== 分层Prompt生成方法 ====================
+    # ==================== 自然语言Prompt增强 ====================
+
+    async def enhance_prompt(
+        self,
+        user_instruction: str,
+        reference_analysis: Optional[ImageAnalysis] = None,
+    ) -> str:
+        """
+        自然语言提示词增强
+
+        核心理念：
+        - 理解用户意图，用自然语言补全
+        - 不强加模板约束，保持描述自然流畅
+        - 让图像模型发挥原生能力
+
+        Args:
+            user_instruction: 用户输入的设计意图
+            reference_analysis: 参考图分析结果（可选）
+
+        Returns:
+            增强后的自然语言提示词
+        """
+        # 构建上下文
+        context = ""
+        if reference_analysis:
+            # 提取关键信息
+            primary = [e.type for e in reference_analysis.elements.primary]
+            secondary = [f"{e.count}个{e.type}" for e in reference_analysis.elements.secondary if e.count]
+            style_tags = reference_analysis.style.tags if reference_analysis.style else []
+            mood = reference_analysis.style.mood if reference_analysis.style else ""
+
+            context = f"""
+参考图包含：
+- 主要元素：{', '.join(primary)}
+- 装饰元素：{', '.join(secondary)}
+- 风格特征：{', '.join(style_tags)}
+- 整体氛围：{mood}
+"""
+
+        system_prompt = """你是创意设计助手。你的任务是理解用户的设计意图，并用自然流畅的描述补全它。
+
+规则：
+1. 保持用户原始意图，不要过度添加
+2. 如果有参考图信息，适当融合但不要重复全部细节
+3. 用英文输出，适合AI图像生成
+4. 描述要自然、简洁、具体
+5. 不需要添加技术参数（如分辨率、灯光），模型会自行处理
+
+示例：
+- 用户说"把贝壳换成海星" → "A charm with starfish pendant replacing the shell, keeping other decorative elements"
+- 用户说"加一些蓝色珠子" → "Add blue glass beads as accent decoration"
+- 用户说"设计一个海洋风钥匙扣" → "Ocean-themed keychain with shell and starfish pendants, blue and white color palette"
+
+只输出英文描述，不需要解释。"""
+
+        messages = [
+            ChatMessage(
+                role="user",
+                content=f"""{context}
+用户需求：{user_instruction}
+
+请用自然的英文描述这个设计。""",
+            )
+        ]
+
+        enhanced = await self.chat(messages, system_prompt=system_prompt, max_tokens=300)
+
+        print(f"[Enhance Prompt] Input: {user_instruction}")
+        print(f"[Enhance Prompt] Output: {enhanced}")
+
+        return enhanced.strip()
+
+    # ==================== 分层Prompt生成方法（保留兼容性） ====================
 
     def _get_identity_layer(self, product_type: str = "keychain") -> str:
         """

@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 // 风格配置 - 与后端 prompt_patterns.json 保持同步
 export const STYLE_PATTERNS = {

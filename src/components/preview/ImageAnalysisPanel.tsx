@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { detectStyleFromTags, getStyleInfo, type StyleKey } from '../style/StyleSelector';
 
 export interface ImageAnalysis {
@@ -109,7 +109,7 @@ export function ImageAnalysisPanel({
         </div>
 
         {/* 主元素 */}
-        {analysis?.elements.primary.length > 0 && (
+        {(analysis?.elements?.primary?.length || 0) > 0 && analysis && (
           <div className="mb-2">
             <p className="text-[10px] text-gray-300 mb-1">主体</p>
             <div className="flex flex-wrap gap-1.5">
@@ -126,7 +126,7 @@ export function ImageAnalysisPanel({
         )}
 
         {/* 辅助元素 */}
-        {analysis?.elements.secondary.length > 0 && (
+        {(analysis?.elements?.secondary?.length || 0) > 0 && analysis && (
           <div className="mb-2">
             <p className="text-[10px] text-gray-300 mb-1">辅助</p>
             <div className="flex flex-wrap gap-1.5">
@@ -143,7 +143,7 @@ export function ImageAnalysisPanel({
         )}
 
         {/* 五金配件 */}
-        {analysis?.elements.hardware.length > 0 && (
+        {(analysis?.elements?.hardware?.length || 0) > 0 && analysis && (
           <div>
             <p className="text-[10px] text-gray-300 mb-1">五金</p>
             <div className="flex flex-wrap gap-1.5">
