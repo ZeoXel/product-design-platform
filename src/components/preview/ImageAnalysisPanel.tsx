@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { detectStyleFromTags, getStyleInfo, type StyleKey } from '../style/StyleSelector';
 
 export interface ImageAnalysis {
   elements: {
@@ -22,66 +23,156 @@ interface ImageAnalysisPanelProps {
   isAnalyzing: boolean;
   similarItems?: { id: string; url: string; similarity: number }[];
   onSimilarClick?: (id: string) => void;
+  onStyleSelect?: (style: StyleKey) => void;
+  versionId?: string;  // 当前版本ID，用于显示版本标识
 }
 
 export function ImageAnalysisPanel({
   analysis,
   isAnalyzing,
   similarItems = [],
-  onSimilarClick
+  onSimilarClick,
+  onStyleSelect,
+  versionId
 }: ImageAnalysisPanelProps) {
+  // 检测风格类型
+  const detectedStyle = useMemo(() => {
+    if (!analysis?.style.tags) return null;
+    return detectStyleFromTags(analysis.style.tags);
+  }, [analysis?.style.tags]);
+
+  const styleInfo = detectedStyle ? getStyleInfo(detectedStyle) : null;
+
   if (!analysis && !isAnalyzing) {
     return null;
   }
 
   if (isAnalyzing) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm text-gray-500">分析中...</span>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-gray-500">AI 分析中...</span>
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
+          <div className="h-4 bg-gray-100 rounded animate-pulse w-1/2" />
+          <div className="h-4 bg-gray-100 rounded animate-pulse w-2/3" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* 版本指示器 */}
+      {versionId && (
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-gray-400">分析结果</span>
+          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded font-mono">
+            {versionId.toUpperCase()}
+          </span>
+        </div>
+      )}
+
+      {/* 风格识别卡片 */}
+      {styleInfo && (
+        <div
+          className="p-3 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100/50 border border-primary-200 cursor-pointer hover:shadow-sm transition-shadow"
+          onClick={() => detectedStyle && onStyleSelect?.(detectedStyle)}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">{styleInfo.emoji}</span>
+            <span className="text-sm font-semibold text-primary-700">{styleInfo.name}</span>
+          </div>
+          <p className="text-xs text-primary-600/80">{styleInfo.description}</p>
+          <div className="flex gap-1 mt-2">
+            {styleInfo.colors.slice(0, 3).map((color, i) => (
+              <span
+                key={i}
+                className="px-1.5 py-0.5 bg-white/60 text-primary-600 text-[10px] rounded"
+              >
+                {color}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 元素识别 */}
       <div>
-        <p className="text-xs text-gray-400 mb-2">元素</p>
-        <div className="flex flex-wrap gap-1.5">
-          {analysis?.elements.primary.map((el, i) => (
-            <span
-              key={`p-${i}`}
-              className="px-2 py-0.5 bg-primary-50 text-primary-600 text-xs rounded-full"
-            >
-              {el.type}{el.color && ` · ${el.color}`}
-            </span>
-          ))}
-          {analysis?.elements.secondary.map((el, i) => (
-            <span
-              key={`s-${i}`}
-              className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full"
-            >
-              {el.type}{el.count && ` ×${el.count}`}
-            </span>
-          ))}
-          {analysis?.elements.hardware.map((el, i) => (
-            <span
-              key={`h-${i}`}
-              className="px-2 py-0.5 bg-amber-50 text-amber-600 text-xs rounded-full"
-            >
-              {el.type}
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-400">识别元素</p>
+          <span className="text-[10px] text-gray-300">
+            共 {(analysis?.elements.primary.length || 0) + (analysis?.elements.secondary.length || 0) + (analysis?.elements.hardware.length || 0)} 个
+          </span>
+        </div>
+
+        {/* 主元素 */}
+        {analysis?.elements.primary.length > 0 && (
+          <div className="mb-2">
+            <p className="text-[10px] text-gray-300 mb-1">主体</p>
+            <div className="flex flex-wrap gap-1.5">
+              {analysis.elements.primary.map((el, i) => (
+                <span
+                  key={`p-${i}`}
+                  className="px-2 py-0.5 bg-primary-50 text-primary-600 text-xs rounded-full font-medium"
+                >
+                  {el.type}{el.color && ` · ${el.color}`}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 辅助元素 */}
+        {analysis?.elements.secondary.length > 0 && (
+          <div className="mb-2">
+            <p className="text-[10px] text-gray-300 mb-1">辅助</p>
+            <div className="flex flex-wrap gap-1.5">
+              {analysis.elements.secondary.map((el, i) => (
+                <span
+                  key={`s-${i}`}
+                  className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full"
+                >
+                  {el.type}{el.count && ` ×${el.count}`}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 五金配件 */}
+        {analysis?.elements.hardware.length > 0 && (
+          <div>
+            <p className="text-[10px] text-gray-300 mb-1">五金</p>
+            <div className="flex flex-wrap gap-1.5">
+              {analysis.elements.hardware.map((el, i) => (
+                <span
+                  key={`h-${i}`}
+                  className="px-2 py-0.5 bg-amber-50 text-amber-600 text-xs rounded-full"
+                >
+                  {el.type}{el.material && ` · ${el.material}`}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 风格标签 */}
+      <div>
+        <p className="text-xs text-gray-400 mb-1">风格标签</p>
+        <div className="flex flex-wrap gap-1">
+          {analysis?.style.tags.map((tag, i) => (
+            <span key={i} className="px-2 py-0.5 bg-violet-50 text-violet-600 text-xs rounded-full">
+              {tag}
             </span>
           ))}
         </div>
-      </div>
-
-      {/* 风格 */}
-      <div>
-        <p className="text-xs text-gray-400 mb-1">风格</p>
-        <p className="text-sm text-gray-600">
-          {analysis?.style.tags.join(' · ')}
-        </p>
+        {analysis?.style.mood && (
+          <p className="text-xs text-gray-500 mt-1">氛围：{analysis.style.mood}</p>
+        )}
       </div>
 
       {/* 规格 */}

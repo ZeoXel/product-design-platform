@@ -1,0 +1,121 @@
+{
+  "styles": {
+    "ocean_kawaii": {
+      "name": "海洋风少女系",
+      "keywords": ["ocean-themed", "kawaii", "coastal", "beach", "marine", "sea"],
+      "typical_elements": ["shell", "starfish", "dolphin", "pearl", "coral", "seahorse"],
+      "secondary_elements": ["glass beads", "round beads", "tube beads", "crystal beads"],
+      "color_palette": ["mint green", "ocean blue", "turquoise", "pearl white", "pastel pink", "sky blue", "macaroon colors"],
+      "mood": ["fresh", "summer", "sweet", "cute", "dreamy"],
+      "structure": ["central pendant", "beaded chain"]
+    },
+    "bohemian": {
+      "name": "波西米亚民族风",
+      "keywords": ["bohemian", "boho", "ethnic", "tribal", "handcrafted", "artisan"],
+      "typical_elements": ["tassel", "wooden beads", "feather", "woven cord", "rattan ball", "natural stone"],
+      "secondary_elements": ["freshwater pearls", "amber beads", "enamel beads", "spacer beads"],
+      "color_palette": ["earth tones", "terracotta", "cream", "natural brown", "amber", "rust", "warm gold"],
+      "mood": ["free-spirited", "artistic", "natural", "vintage", "handmade"],
+      "structure": ["multi-strand", "tassel drop", "layered"]
+    },
+    "bohemian_natural": {
+      "name": "波西米亚自然系",
+      "keywords": ["bohemian", "natural", "organic", "handwoven", "earthy"],
+      "typical_elements": ["natural stone butterfly", "braided cord", "flower decoration", "oval stone beads"],
+      "secondary_elements": ["round natural stone beads", "metal spacer beads", "braided tassels"],
+      "color_palette": ["sage green", "cream", "brown", "beige", "natural tones"],
+      "mood": ["natural", "serene", "organic", "artisan"],
+      "structure": ["multi-strand braided", "tassel drop"]
+    },
+    "ocean_shell": {
+      "name": "海洋贝壳系",
+      "keywords": ["ocean", "shell", "coastal", "beach", "romantic", "dreamy"],
+      "typical_elements": ["natural shell", "scallop shell", "starfish charm", "shell-shaped beads"],
+      "secondary_elements": ["glass beads", "star charms", "crystal beads"],
+      "color_palette": ["coral pink", "mint", "pearl white", "orange-red gradient", "soft pink"],
+      "mood": ["romantic", "coastal", "feminine", "dreamy", "fairy-tale"],
+      "structure": ["central pendant", "mixed charms"]
+    },
+    "candy_playful": {
+      "name": "糖果色童趣系",
+      "keywords": ["playful", "candy-colored", "whimsical", "fun", "colorful"],
+      "typical_elements": ["flower bead", "teardrop bead", "irregular shaped bead", "yarn pom-pom"],
+      "secondary_elements": ["pearls", "glass beads", "rainbow cord", "metal beads"],
+      "color_palette": ["candy pink", "yellow", "red", "rainbow", "bright colors", "pastel"],
+      "mood": ["cheerful", "playful", "youthful", "creative"],
+      "structure": ["braided cord", "mixed elements"]
+    },
+    "dreamy_star": {
+      "name": "梦幻星空系",
+      "keywords": ["dreamy", "starry", "celestial", "minimal", "kawaii"],
+      "typical_elements": ["star pendant", "moon charm", "small round beads"],
+      "secondary_elements": ["accent beads", "metal tag charm"],
+      "color_palette": ["sky blue", "gold", "soft pink", "silver", "iridescent"],
+      "mood": ["ethereal", "dreamy", "delicate", "minimal"],
+      "structure": ["simple beaded", "minimal pendant"]
+    },
+    "minimalist": {
+      "name": "简约现代风",
+      "keywords": ["minimalist", "modern", "simple", "clean", "geometric"],
+      "typical_elements": ["geometric pendant", "single charm", "metal ring"],
+      "secondary_elements": ["simple beads", "metal spacers"],
+      "color_palette": ["monochrome", "gold", "silver", "black", "white"],
+      "mood": ["sophisticated", "elegant", "understated"],
+      "structure": ["single pendant", "minimal chain"]
+    },
+    "vintage_elegant": {
+      "name": "复古典雅风",
+      "keywords": ["vintage", "elegant", "classic", "antique", "refined"],
+      "typical_elements": ["baroque pearl", "amber", "cameo", "filigree"],
+      "secondary_elements": ["vintage beads", "antique metal charms"],
+      "color_palette": ["antique gold", "burgundy", "ivory", "deep green", "bronze"],
+      "mood": ["timeless", "sophisticated", "nostalgic"],
+      "structure": ["layered", "classic pendant"]
+    }
+  },
+  "style_detection_rules": {
+    "keywords_to_style": {
+      "海洋|贝壳|海星|海豚|珊瑚": "ocean_kawaii",
+      "波西米亚|民族|编织|流苏|自然石": "bohemian",
+      "蝴蝶|天然石|编织绳|自然": "bohemian_natural",
+      "贝壳|扇贝|梦幻|童话": "ocean_shell",
+      "糖果|彩虹|童趣|可爱|甜美": "candy_playful",
+      "星星|月亮|星空|梦幻|简约": "dreamy_star",
+      "简约|现代|几何|极简": "minimalist",
+      "复古|典雅|巴洛克|琥珀": "vintage_elegant"
+    }
+  },
+  "common_hardware": {
+    "clasps": ["lobster clasp", "swivel clasp", "spring ring", "toggle clasp", "magnetic clasp"],
+    "rings": ["keyring", "split ring", "jump ring", "D-ring", "O-ring"],
+    "connectors": ["chain extender", "connector ring", "bead cap", "crimp bead"],
+    "findings": ["T-pin", "eye pin", "head pin", "bail", "pendant holder"]
+  },
+  "product_types": {
+    "keychain": {
+      "name": "钥匙扣",
+      "typical_hardware": ["lobster clasp", "keyring", "split ring"],
+      "typical_length": "10-15cm"
+    },
+    "bag_charm": {
+      "name": "包挂",
+      "typical_hardware": ["lobster clasp", "swivel clasp", "chain"],
+      "typical_length": "15-20cm"
+    },
+    "phone_strap": {
+      "name": "手机挂绳",
+      "typical_hardware": ["cord loop", "connector", "adjustable clasp"],
+      "typical_length": "20-30cm"
+    },
+    "car_charm": {
+      "name": "车挂",
+      "typical_hardware": ["cord", "tassel hook", "adjustable loop"],
+      "typical_length": "25-35cm"
+    }
+  },
+  "meta": {
+    "version": "1.0",
+    "created_at": "2025-12-25",
+    "description": "配饰设计风格模式库，用于风格识别和 prompt 优化"
+  }
+}

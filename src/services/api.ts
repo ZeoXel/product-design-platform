@@ -2,6 +2,17 @@
  * API 客户端服务
  */
 
+import type {
+  ProductType,
+  StyleKey,
+  LayeredPrompt,
+  DesignPreset,
+  PresetListResponse,
+  ProductTypePreset,
+  StylePreset,
+  DesignResponseV2,
+} from '../types';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 // ==================== 类型定义 ====================
@@ -139,6 +150,17 @@ export async function healthCheck(): Promise<{ status: string; service: string }
   return request('/health');
 }
 
+// 风格类型定义
+export type StyleHint =
+  | 'ocean_kawaii'
+  | 'bohemian'
+  | 'bohemian_natural'
+  | 'ocean_shell'
+  | 'candy_playful'
+  | 'dreamy_star'
+  | 'minimalist'
+  | 'vintage_elegant';
+
 /**
  * 生成设计
  */
@@ -148,6 +170,7 @@ export async function generateDesign(params: {
   session_id?: string;
   aspect_ratio?: AspectRatio;
   image_size?: ImageSize;
+  style_hint?: StyleHint;
 }): Promise<DesignResponse> {
   return request('/generate', {
     method: 'POST',
@@ -157,6 +180,7 @@ export async function generateDesign(params: {
       session_id: params.session_id,
       aspect_ratio: params.aspect_ratio || '1:1',
       image_size: params.image_size || '2K',
+      style_hint: params.style_hint,
     }),
   });
 }
@@ -331,10 +355,76 @@ export async function findSimilar(params: {
   });
 }
 
+// ==================== V2 预设系统 API ====================
+
+/**
+ * 获取所有预设列表
+ */
+export async function getPresets(): Promise<PresetListResponse> {
+  return request('/presets');
+}
+
+/**
+ * 获取所有产品类型预设
+ */
+export async function getProductTypes(): Promise<{
+  success: boolean;
+  product_types: ProductTypePreset[];
+}> {
+  return request('/presets/product-types');
+}
+
+/**
+ * 获取所有风格预设
+ */
+export async function getStyles(): Promise<{
+  success: boolean;
+  styles: StylePreset[];
+}> {
+  return request('/presets/styles');
+}
+
+/**
+ * 获取指定的组合预设
+ */
+export async function getPreset(
+  productType: ProductType,
+  style: StyleKey
+): Promise<DesignPreset> {
+  return request(`/presets/${productType}/${style}`);
+}
+
+/**
+ * V2 设计生成（分层Prompt + 预设系统）
+ */
+export async function generateDesignV2(params: {
+  instruction: string;
+  reference_image?: string;
+  session_id?: string;
+  product_type?: ProductType;
+  style_key?: StyleKey;
+  include_similar?: boolean;
+  image_size?: string;
+}): Promise<DesignResponseV2> {
+  return request('/generate/v2', {
+    method: 'POST',
+    body: JSON.stringify({
+      instruction: params.instruction,
+      reference_image: params.reference_image,
+      session_id: params.session_id,
+      product_type: params.product_type || 'keychain',
+      style_key: params.style_key || 'ocean_kawaii',
+      include_similar: params.include_similar ?? false,
+      image_size: params.image_size || '2K',
+    }),
+  });
+}
+
 // 导出API对象
 export const api = {
   healthCheck,
   generateDesign,
+  generateDesignV2,
   analyzeImage,
   generateImage,
   chat,
@@ -346,6 +436,11 @@ export const api = {
   getReference,
   deleteReference,
   findSimilar,
+  // 预设系统
+  getPresets,
+  getProductTypes,
+  getStyles,
+  getPreset,
 };
 
 export default api;

@@ -27,6 +27,18 @@ class ImageSize(str, Enum):
     SIZE_4K = "4K"
 
 
+class StyleHint(str, Enum):
+    """风格提示 - 用于引导生成结果的风格方向"""
+    OCEAN_KAWAII = "ocean_kawaii"         # 海洋风少女系
+    BOHEMIAN = "bohemian"                  # 波西米亚民族风
+    BOHEMIAN_NATURAL = "bohemian_natural"  # 波西米亚自然系
+    OCEAN_SHELL = "ocean_shell"            # 海洋贝壳系
+    CANDY_PLAYFUL = "candy_playful"        # 糖果色童趣系
+    DREAMY_STAR = "dreamy_star"            # 梦幻星空系
+    MINIMALIST = "minimalist"              # 简约现代风
+    VINTAGE_ELEGANT = "vintage_elegant"    # 复古典雅风
+
+
 # ==================== 请求模型 ====================
 
 class ChatMessage(BaseModel):
@@ -42,6 +54,7 @@ class GenerateRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="会话ID")
     aspect_ratio: AspectRatio = Field(AspectRatio.RATIO_1_1, description="生成图像宽高比")
     image_size: ImageSize = Field(ImageSize.SIZE_2K, description="生成图像尺寸")
+    style_hint: Optional[StyleHint] = Field(None, description="风格提示，用于引导生成方向")
 
 
 class ChatRequest(BaseModel):
@@ -154,3 +167,147 @@ class ErrorResponse(BaseModel):
     success: bool = Field(False)
     error: str = Field(..., description="错误信息")
     code: str = Field("UNKNOWN_ERROR", description="错误代码")
+
+
+# ==================== 产品类型枚举 ====================
+
+class ProductType(str, Enum):
+    """产品类型"""
+    KEYCHAIN = "keychain"           # 钥匙扣
+    BAG_CHARM = "bag_charm"         # 包挂
+    PHONE_STRAP = "phone_strap"     # 手机挂绳
+    CAR_CHARM = "car_charm"         # 车挂
+    GENERIC = "generic"             # 通用挂饰
+
+
+class StructureType(str, Enum):
+    """结构类型"""
+    SINGLE_PENDANT = "single_pendant"   # 单一吊坠式
+    BEADED_CHAIN = "beaded_chain"       # 串珠链式
+    TASSEL_STYLE = "tassel_style"       # 流苏垂坠式
+    MULTI_LAYER = "multi_layer"         # 多层式
+    CLUSTER = "cluster"                  # 簇状式
+
+
+# ==================== 分层Prompt模型 ====================
+
+class PromptLayer(BaseModel):
+    """Prompt层"""
+    name: str = Field(..., description="层名称")
+    content: str = Field(..., description="层内容")
+    priority: int = Field(0, description="优先级，数字越小优先级越高")
+
+
+class LayeredPrompt(BaseModel):
+    """分层Prompt结构"""
+    identity: str = Field(..., description="Layer 1: 产品身份锁定")
+    structure: str = Field(..., description="Layer 2: 结构约束")
+    materials: str = Field(..., description="Layer 3: 材质描述")
+    style: str = Field(..., description="Layer 4: 风格定义")
+    modification: str = Field(..., description="Layer 5: 用户修改（KEY CHANGE）")
+    technical: str = Field(..., description="Layer 6: 技术参数")
+    negative: str = Field("", description="负面提示词")
+    full_prompt: str = Field(..., description="组装后的完整prompt")
+
+    # 元信息
+    product_type: str = Field("keychain", description="产品类型")
+    style_key: str = Field("ocean_kawaii", description="风格标识")
+
+    def get_layers(self) -> List[PromptLayer]:
+        """获取所有层列表"""
+        return [
+            PromptLayer(name="identity", content=self.identity, priority=1),
+            PromptLayer(name="structure", content=self.structure, priority=2),
+            PromptLayer(name="materials", content=self.materials, priority=3),
+            PromptLayer(name="style", content=self.style, priority=4),
+            PromptLayer(name="modification", content=self.modification, priority=5),
+            PromptLayer(name="technical", content=self.technical, priority=6),
+        ]
+
+
+# ==================== 预设模型 ====================
+
+class ColorPalette(BaseModel):
+    """颜色方案"""
+    primary: List[str] = Field(default_factory=list, description="主色调")
+    secondary: List[str] = Field(default_factory=list, description="辅助色")
+    accent: List[str] = Field(default_factory=list, description="点缀色")
+
+
+class ProductTypePreset(BaseModel):
+    """产品类型预设"""
+    id: str = Field(..., description="预设ID")
+    name: str = Field(..., description="中文名称")
+    name_en: str = Field(..., description="英文名称")
+    identity: str = Field(..., description="产品身份描述")
+    typical_hardware: List[str] = Field(default_factory=list, description="典型五金件")
+    typical_structure: str = Field("single_pendant", description="典型结构类型")
+    default_length_cm: List[int] = Field([8, 15], description="默认长度范围(cm)")
+    description: str = Field("", description="描述")
+    icon: str = Field("✨", description="图标")
+
+
+class StylePreset(BaseModel):
+    """风格预设"""
+    id: str = Field(..., description="预设ID")
+    name: str = Field(..., description="中文名称")
+    name_en: str = Field(..., description="英文名称")
+    keywords: List[str] = Field(default_factory=list, description="关键词")
+    typical_materials: List[str] = Field(default_factory=list, description="典型材料")
+    color_palette: ColorPalette = Field(default_factory=ColorPalette, description="颜色方案")
+    mood_keywords: List[str] = Field(default_factory=list, description="情绪关键词")
+    style_injection: str = Field("", description="风格注入文本")
+    icon: str = Field("✨", description="图标")
+
+
+class DesignPreset(BaseModel):
+    """设计预设（组合产品类型和风格）"""
+    product_type: ProductTypePreset = Field(..., description="产品类型预设")
+    style: StylePreset = Field(..., description="风格预设")
+
+    # 计算属性
+    @property
+    def product_type_id(self) -> str:
+        return self.product_type.id
+
+    @property
+    def style_id(self) -> str:
+        return self.style.id
+
+
+class PresetListResponse(BaseModel):
+    """预设列表响应"""
+    product_types: List[ProductTypePreset] = Field(default_factory=list)
+    styles: List[StylePreset] = Field(default_factory=list)
+
+
+# ==================== 增强版请求模型 ====================
+
+class GenerateRequestV2(BaseModel):
+    """增强版设计生成请求"""
+    instruction: str = Field(..., description="用户设计指令")
+    reference_image: Optional[str] = Field(None, description="参考图base64或URL")
+    session_id: Optional[str] = Field(None, description="会话ID")
+    aspect_ratio: AspectRatio = Field(AspectRatio.RATIO_1_1, description="生成图像宽高比")
+    image_size: ImageSize = Field(ImageSize.SIZE_2K, description="生成图像尺寸")
+
+    # 新增：预设相关
+    product_type: Optional[str] = Field(None, description="产品类型ID")
+    style_key: Optional[str] = Field(None, description="风格ID")
+
+    # 新增：控制选项
+    include_similar: bool = Field(False, description="是否查找相似产品（仅用于灵感展示）")
+    use_layered_prompt: bool = Field(True, description="是否使用分层Prompt")
+
+
+class DesignResponseV2(BaseModel):
+    """增强版设计生成响应"""
+    success: bool = Field(..., description="是否成功")
+    image_url: Optional[str] = Field(None, description="生成图像URL")
+    analysis: Optional[ImageAnalysis] = Field(None, description="图像分析结果")
+    prompt_used: Optional[str] = Field(None, description="使用的提示词")
+    layered_prompt: Optional[LayeredPrompt] = Field(None, description="分层Prompt结构")
+    message: str = Field("", description="处理消息")
+    cost_estimate: Optional[dict] = Field(None, description="成本估算")
+    preset_used: Optional[dict] = Field(None, description="使用的预设信息")
+    session_id: Optional[str] = Field(None, description="会话ID（用于后续请求）")

@@ -1,0 +1,212 @@
+{
+  "product_types": {
+    "keychain": {
+      "id": "keychain",
+      "name": "钥匙扣",
+      "name_en": "Keychain Charm",
+      "identity": "keychain charm pendant",
+      "typical_hardware": ["lobster clasp", "split keyring", "swivel clasp"],
+      "typical_structure": "single_pendant",
+      "default_length_cm": [8, 12],
+      "description": "挂在钥匙上的装饰挂件",
+      "icon": "🔑"
+    },
+    "bag_charm": {
+      "id": "bag_charm",
+      "name": "包挂",
+      "name_en": "Bag Charm",
+      "identity": "bag charm accessory",
+      "typical_hardware": ["carabiner clip", "swivel clasp", "D-ring"],
+      "typical_structure": "multi_layer",
+      "default_length_cm": [12, 18],
+      "description": "挂在包包上的装饰挂件",
+      "icon": "👜"
+    },
+    "phone_strap": {
+      "id": "phone_strap",
+      "name": "手机挂绳",
+      "name_en": "Phone Strap",
+      "identity": "phone strap charm",
+      "typical_hardware": ["lanyard cord", "phone connector", "adjustable loop"],
+      "typical_structure": "beaded_chain",
+      "default_length_cm": [15, 25],
+      "description": "挂在手机上的装饰挂绳",
+      "icon": "📱"
+    },
+    "car_charm": {
+      "id": "car_charm",
+      "name": "车挂",
+      "name_en": "Car Charm",
+      "identity": "car rearview mirror charm",
+      "typical_hardware": ["adjustable cord", "suction cup", "hook"],
+      "typical_structure": "tassel_style",
+      "default_length_cm": [20, 35],
+      "description": "挂在汽车后视镜上的装饰挂件",
+      "icon": "🚗"
+    },
+    "generic": {
+      "id": "generic",
+      "name": "通用挂饰",
+      "name_en": "Generic Charm",
+      "identity": "decorative hanging charm",
+      "typical_hardware": ["lobster clasp", "jump ring"],
+      "typical_structure": "single_pendant",
+      "default_length_cm": [8, 15],
+      "description": "通用装饰挂件",
+      "icon": "✨"
+    }
+  },
+
+  "style_presets": {
+    "ocean_kawaii": {
+      "id": "ocean_kawaii",
+      "name": "海洋风少女系",
+      "name_en": "Ocean Kawaii",
+      "keywords": ["ocean-themed", "kawaii", "cute", "pastel", "sweet"],
+      "typical_materials": ["shell", "starfish", "pearl", "glass beads", "resin dolphin"],
+      "color_palette": {
+        "primary": ["mint green", "ocean blue"],
+        "secondary": ["pearl white", "coral pink"],
+        "accent": ["gold"]
+      },
+      "mood_keywords": ["fresh", "summer", "sweet", "playful", "youthful"],
+      "style_injection": "ocean-themed kawaii aesthetic with pastel colors, cute and sweet summer vibes",
+      "icon": "🐚"
+    },
+    "bohemian": {
+      "id": "bohemian",
+      "name": "波西米亚民族风",
+      "name_en": "Bohemian Ethnic",
+      "keywords": ["bohemian", "ethnic", "tribal", "artisan", "handcrafted"],
+      "typical_materials": ["wooden beads", "tassel", "woven cord", "natural stone", "feather"],
+      "color_palette": {
+        "primary": ["terracotta", "olive green"],
+        "secondary": ["amber", "cream"],
+        "accent": ["turquoise"]
+      },
+      "mood_keywords": ["free-spirited", "artistic", "wanderlust", "eclectic"],
+      "style_injection": "bohemian ethnic style with earthy tones, artisan handcrafted feel",
+      "icon": "🪶"
+    },
+    "bohemian_natural": {
+      "id": "bohemian_natural",
+      "name": "波西米亚自然系",
+      "name_en": "Bohemian Natural",
+      "keywords": ["natural", "organic", "earthy", "rustic", "eco-friendly"],
+      "typical_materials": ["wooden beads", "hemp cord", "natural stone", "dried flowers", "clay"],
+      "color_palette": {
+        "primary": ["earth brown", "sage green"],
+        "secondary": ["sand beige", "ivory"],
+        "accent": ["moss green"]
+      },
+      "mood_keywords": ["grounded", "peaceful", "nature-inspired", "sustainable"],
+      "style_injection": "natural organic aesthetic with earth tones, rustic and eco-friendly vibes",
+      "icon": "🌿"
+    },
+    "ocean_shell": {
+      "id": "ocean_shell",
+      "name": "海洋贝壳系",
+      "name_en": "Ocean Shell",
+      "keywords": ["coastal", "beach", "marine", "nautical", "seaside"],
+      "typical_materials": ["natural shell", "sea glass", "pearl", "coral", "starfish"],
+      "color_palette": {
+        "primary": ["deep ocean blue", "sandy beige"],
+        "secondary": ["seafoam green", "pearl white"],
+        "accent": ["coral"]
+      },
+      "mood_keywords": ["coastal", "relaxed", "vacation", "breezy", "serene"],
+      "style_injection": "coastal beach aesthetic with natural shells and sea elements, vacation vibes",
+      "icon": "🐚"
+    },
+    "candy_playful": {
+      "id": "candy_playful",
+      "name": "糖果色童趣系",
+      "name_en": "Candy Playful",
+      "keywords": ["candy", "colorful", "playful", "fun", "rainbow"],
+      "typical_materials": ["acrylic beads", "resin charms", "colorful glass", "polymer clay"],
+      "color_palette": {
+        "primary": ["bubblegum pink", "sky blue"],
+        "secondary": ["lemon yellow", "lavender"],
+        "accent": ["rainbow mix"]
+      },
+      "mood_keywords": ["cheerful", "youthful", "energetic", "whimsical", "fun"],
+      "style_injection": "candy-colored playful aesthetic with bright cheerful colors, fun and youthful",
+      "icon": "🍭"
+    },
+    "dreamy_star": {
+      "id": "dreamy_star",
+      "name": "梦幻星空系",
+      "name_en": "Dreamy Star",
+      "keywords": ["celestial", "starry", "dreamy", "magical", "galaxy"],
+      "typical_materials": ["crystal", "moonstone", "star charm", "glitter resin", "holographic"],
+      "color_palette": {
+        "primary": ["midnight blue", "deep purple"],
+        "secondary": ["silver", "soft pink"],
+        "accent": ["gold stars"]
+      },
+      "mood_keywords": ["ethereal", "romantic", "mystical", "enchanting", "magical"],
+      "style_injection": "celestial dreamy aesthetic with starry elements, magical and ethereal vibes",
+      "icon": "⭐"
+    },
+    "minimalist": {
+      "id": "minimalist",
+      "name": "简约现代风",
+      "name_en": "Minimalist Modern",
+      "keywords": ["minimalist", "modern", "clean", "simple", "geometric"],
+      "typical_materials": ["metal", "geometric shapes", "single pendant", "thin chain"],
+      "color_palette": {
+        "primary": ["black", "white"],
+        "secondary": ["gold", "silver"],
+        "accent": ["rose gold"]
+      },
+      "mood_keywords": ["elegant", "sophisticated", "understated", "refined", "chic"],
+      "style_injection": "minimalist modern aesthetic with clean lines, sophisticated and refined",
+      "icon": "◾"
+    },
+    "vintage_elegant": {
+      "id": "vintage_elegant",
+      "name": "复古典雅风",
+      "name_en": "Vintage Elegant",
+      "keywords": ["vintage", "antique", "classic", "timeless", "ornate"],
+      "typical_materials": ["baroque pearl", "amber", "antique brass", "filigree", "cameo"],
+      "color_palette": {
+        "primary": ["antique gold", "burgundy"],
+        "secondary": ["ivory", "bronze"],
+        "accent": ["emerald green"]
+      },
+      "mood_keywords": ["nostalgic", "luxurious", "romantic", "ornate", "timeless"],
+      "style_injection": "vintage elegant aesthetic with antique elements, luxurious and romantic",
+      "icon": "🏛️"
+    }
+  },
+
+  "detection_rules": {
+    "product_type_keywords": {
+      "keychain": ["钥匙", "keychain", "key", "钥匙扣", "钥匙链"],
+      "bag_charm": ["包", "bag", "purse", "handbag", "包挂", "包饰"],
+      "phone_strap": ["手机", "phone", "mobile", "挂绳", "手机链"],
+      "car_charm": ["车", "car", "汽车", "车挂", "后视镜"]
+    },
+    "hardware_to_product": {
+      "lobster clasp": "keychain",
+      "keyring": "keychain",
+      "carabiner": "bag_charm",
+      "lanyard": "phone_strap"
+    },
+    "style_keywords": {
+      "ocean_kawaii": ["海洋", "ocean", "少女", "kawaii", "可爱", "cute"],
+      "bohemian": ["波西米亚", "bohemian", "民族", "ethnic", "boho"],
+      "bohemian_natural": ["自然", "natural", "有机", "organic", "eco"],
+      "ocean_shell": ["贝壳", "shell", "海滩", "beach", "coastal"],
+      "candy_playful": ["糖果", "candy", "彩虹", "rainbow", "童趣"],
+      "dreamy_star": ["星空", "star", "梦幻", "dreamy", "celestial"],
+      "minimalist": ["简约", "minimalist", "现代", "modern", "simple"],
+      "vintage_elegant": ["复古", "vintage", "典雅", "elegant", "antique"]
+    }
+  },
+
+  "default_preset": {
+    "product_type": "keychain",
+    "style": "ocean_kawaii"
+  }
+}

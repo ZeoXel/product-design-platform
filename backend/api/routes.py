@@ -8,19 +8,23 @@ from typing import Optional
 
 from models import (
     GenerateRequest,
+    GenerateRequestV2,
     ChatRequest,
     ImageAnalyzeRequest,
     ImageGenerateRequest,
     SimilarSearchRequest,
     DesignResponse,
+    DesignResponseV2,
     ChatResponse,
     AnalysisResult,
     ImageAnalysis,
     GenerationResult,
     ErrorResponse,
+    PresetListResponse,
+    DesignPreset,
 )
 from agents import design_agent
-from services import claude_service, nano_banana_service, gallery_service, embedding_service
+from services import claude_service, nano_banana_service, gallery_service, embedding_service, preset_service
 
 router = APIRouter(prefix="/api/v1", tags=["Design API"])
 
@@ -33,6 +37,7 @@ async def generate_design(request: GenerateRequest):
     主设计生成接口
 
     根据用户指令和可选的参考图生成挂饰设计
+    支持 style_hint 参数来引导生成风格
     """
     try:
         result = await design_agent.generate_design(
@@ -41,6 +46,7 @@ async def generate_design(request: GenerateRequest):
             session_id=request.session_id,
             aspect_ratio=request.aspect_ratio,
             image_size=request.image_size,
+            style_hint=request.style_hint.value if request.style_hint else None,
         )
         return result
     except Exception as e:
@@ -72,6 +78,88 @@ async def generate_design_with_upload(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/generate/v2", response_model=DesignResponseV2)
+async def generate_design_v2(request: GenerateRequestV2):
+    """
+    V2 设计生成接口（分层Prompt + 预设系统）
+
+    新特性:
+    - 分层Prompt结构（6层）
+    - 产品类型预设
+    - 风格预设
+    - 向量检索可选
+    - 返回完整的Prompt层级信息
+    """
+    try:
+        result = await design_agent.generate_design_v2(
+            instruction=request.instruction,
+            reference_image=request.reference_image,
+            session_id=request.session_id,
+            product_type=request.product_type,
+            style_key=request.style_key,
+            include_similar=request.include_similar,
+            image_size=request.image_size,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 预设管理 ====================
+
+@router.get("/presets", response_model=PresetListResponse)
+async def list_presets():
+    """
+    获取所有可用预设
+
+    返回产品类型和风格预设列表
+    """
+    try:
+        return preset_service.list_presets()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/presets/product-types")
+async def list_product_types():
+    """
+    获取所有产品类型预设
+    """
+    try:
+        types = preset_service.list_product_types()
+        return {"success": True, "product_types": types}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/presets/styles")
+async def list_styles():
+    """
+    获取所有风格预设
+    """
+    try:
+        styles = preset_service.list_styles()
+        return {"success": True, "styles": styles}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/presets/{product_type}/{style}", response_model=DesignPreset)
+async def get_preset(product_type: str, style: str):
+    """
+    获取指定的组合预设
+
+    Args:
+        product_type: 产品类型ID (keychain, bag_charm, etc.)
+        style: 风格ID (ocean_kawaii, vintage_bohemian, etc.)
+    """
+    try:
+        preset = preset_service.get_preset(product_type, style)
+        return preset
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 图像分析 ====================
 
 @router.post("/analyze", response_model=ImageAnalysis)
@@ -95,8 +183,11 @@ async def analyze_image(
         # 2. 如果需要，查找相似图片
         if include_similar:
             try:
-                # 使用分析结果生成文本描述用于嵌入
-                text_desc = f"{' '.join(result.style.tags)} {result.style.mood}"
+                # 使用标准化的英文描述生成查询向量
+                from services.search_utils import generate_multimodal_search_description
+                text_desc = generate_multimodal_search_description(result)
+                print(f"[Analyze] Query description: {text_desc[:100]}...")
+
                 query_embedding = await embedding_service.generate_embedding(
                     image_base64=request.image,
                     text=text_desc
@@ -106,7 +197,8 @@ async def analyze_image(
                     print("[Analyze] Cannot generate embedding, skipping similarity search")
                     return result
 
-                similar = await gallery_service.find_similar(query_embedding, top_k=3)
+                # 使用较低阈值（文本嵌入相似度通常偏低）
+                similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.15)
 
                 # 添加相似产品到结果
                 from models import SimilarItem

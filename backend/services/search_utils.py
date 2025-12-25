@@ -1,8 +1,94 @@
 """
 向量检索辅助工具
 提供标准化的图像描述生成功能
+
+注意：当前使用 text-embedding-3-small 文本模型，
+相似度基于文本描述而非图像内容，因此：
+1. 使用英文描述可获得更好的嵌入效果
+2. 描述越详细、标准化，相似度越准确
 """
 from models import ImageAnalysis
+
+
+# 元素类型中英对照
+ELEMENT_EN_MAP = {
+    "贝壳": "shell",
+    "海星": "starfish",
+    "珍珠": "pearl",
+    "水晶": "crystal",
+    "玛瑙": "agate",
+    "流苏": "tassel",
+    "编织绳": "woven cord",
+    "毛线球": "yarn ball",
+    "玻璃珠": "glass bead",
+    "珠子": "bead",
+    "吊坠": "pendant",
+    "天然石": "natural stone",
+    "蝴蝶": "butterfly",
+    "心形": "heart",
+    "星星": "star",
+    "月亮": "moon",
+    "花朵": "flower",
+    "叶子": "leaf",
+    "海豚": "dolphin",
+    "海马": "seahorse",
+    "龙虾扣": "lobster clasp",
+    "钥匙环": "keyring",
+    "登山扣": "carabiner",
+    "旋转扣": "swivel clasp",
+    "跳环": "jump ring",
+    "T针": "T-pin",
+    "9针": "eye pin",
+    "耳钩": "ear hook",
+    "延长链": "extension chain",
+}
+
+# 颜色中英对照
+COLOR_EN_MAP = {
+    "白色": "white",
+    "粉色": "pink",
+    "蓝色": "blue",
+    "绿色": "green",
+    "红色": "red",
+    "紫色": "purple",
+    "金色": "gold",
+    "银色": "silver",
+    "古铜色": "bronze",
+    "玫瑰金": "rose gold",
+    "薄荷绿": "mint green",
+    "天蓝色": "sky blue",
+    "海蓝色": "ocean blue",
+    "透明": "transparent",
+    "渐变": "gradient",
+    "彩虹": "rainbow",
+    "米白": "cream",
+    "奶白": "milky white",
+    "珊瑚粉": "coral pink",
+}
+
+# 风格标签中英对照
+STYLE_EN_MAP = {
+    "海洋风": "ocean style",
+    "波西米亚": "bohemian",
+    "民族风": "ethnic",
+    "甜美": "sweet",
+    "可爱": "cute",
+    "少女系": "girly",
+    "简约": "minimalist",
+    "复古": "vintage",
+    "典雅": "elegant",
+    "自然": "natural",
+    "清新": "fresh",
+    "梦幻": "dreamy",
+    "星空": "starry",
+    "童趣": "playful",
+    "糖果色": "candy color",
+}
+
+
+def _translate(text: str, mapping: dict) -> str:
+    """尝试翻译文本，如果找不到映射则返回原文"""
+    return mapping.get(text, text)
 
 
 def generate_search_description(analysis: ImageAnalysis) -> str:
@@ -81,56 +167,86 @@ def generate_search_description(analysis: ImageAnalysis) -> str:
     return description
 
 
-def generate_multimodal_search_description(analysis: ImageAnalysis) -> str:
+def generate_english_search_description(analysis: ImageAnalysis) -> str:
     """
-    生成适合多模态嵌入的增强描述
+    生成英文检索描述 - 更适合 text-embedding-3-small 模型
 
-    包含更详细的视觉特征，适合用于图像+文本混合嵌入
+    使用英文描述可以获得更准确的嵌入向量匹配
 
     Args:
         analysis: 图像分析结果
 
     Returns:
-        增强的检索描述
+        英文检索描述
     """
-    # 使用基础描述
-    base_desc = generate_search_description(analysis)
+    parts = []
 
-    # 添加额外的视觉提示
-    visual_hints = []
+    # 1. 产品类型
+    parts.append("keychain charm accessory pendant")
 
-    # 从元素提取颜色信息
-    colors = set()
-    for elem in analysis.elements.primary:
-        if elem.color:
-            colors.add(elem.color)
+    # 2. 主要元素 (英文)
+    if analysis.elements.primary:
+        primary_desc = []
+        for elem in analysis.elements.primary:
+            elem_type = _translate(elem.type, ELEMENT_EN_MAP)
+            if elem.color:
+                color = _translate(elem.color, COLOR_EN_MAP)
+                elem_text = f"{color} {elem_type}"
+            else:
+                elem_text = elem_type
+            primary_desc.append(elem_text)
+        parts.append(f"main elements: {', '.join(primary_desc)}")
 
-    if colors:
-        visual_hints.append(f"颜色: {', '.join(sorted(colors))}")
+    # 3. 辅助元素
+    if analysis.elements.secondary:
+        secondary_desc = []
+        for elem in analysis.elements.secondary:
+            elem_type = _translate(elem.type, ELEMENT_EN_MAP)
+            if elem.count and elem.count > 0:
+                secondary_desc.append(f"{elem.count} {elem_type}s")
+            else:
+                secondary_desc.append(elem_type)
+        parts.append(f"decorations: {', '.join(secondary_desc)}")
 
-    # 从建议中提取设计特点
-    if analysis.suggestions:
-        # 提取与设计相关的关键词
-        design_keywords = []
-        for suggestion in analysis.suggestions[:2]:  # 只取前2条
-            # 简化建议为关键特征
-            if "简约" in suggestion or "简洁" in suggestion:
-                design_keywords.append("简约设计")
-            elif "复杂" in suggestion or "丰富" in suggestion:
-                design_keywords.append("复杂设计")
-            elif "对称" in suggestion:
-                design_keywords.append("对称布局")
-            elif "不对称" in suggestion or "非对称" in suggestion:
-                design_keywords.append("非对称布局")
+    # 4. 五金件
+    if analysis.elements.hardware:
+        hardware_desc = []
+        for elem in analysis.elements.hardware:
+            elem_type = _translate(elem.type, ELEMENT_EN_MAP)
+            if elem.material:
+                material = _translate(elem.material, COLOR_EN_MAP)
+                hardware_desc.append(f"{material} {elem_type}")
+            else:
+                hardware_desc.append(elem_type)
+        parts.append(f"hardware: {', '.join(hardware_desc)}")
 
-        if design_keywords:
-            visual_hints.append(f"设计: {', '.join(design_keywords)}")
+    # 5. 风格标签
+    if analysis.style.tags:
+        style_tags = [_translate(tag, STYLE_EN_MAP) for tag in analysis.style.tags[:5]]
+        parts.append(f"style: {', '.join(style_tags)}")
 
-    # 组合基础描述和视觉提示
-    if visual_hints:
-        return f"{base_desc} | {' | '.join(visual_hints)}"
-    else:
-        return base_desc
+    # 6. 情绪氛围
+    if analysis.style.mood:
+        mood = _translate(analysis.style.mood, STYLE_EN_MAP)
+        parts.append(f"mood: {mood}")
+
+    return "; ".join(parts)
+
+
+def generate_multimodal_search_description(analysis: ImageAnalysis) -> str:
+    """
+    生成适合多模态嵌入的增强描述
+
+    优先使用英文描述以获得更好的嵌入效果
+
+    Args:
+        analysis: 图像分析结果
+
+    Returns:
+        英文增强检索描述
+    """
+    # 使用英文描述（对 text-embedding-3-small 效果更好）
+    return generate_english_search_description(analysis)
 
 
 # 测试示例

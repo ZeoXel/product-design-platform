@@ -14,6 +14,7 @@ export interface ImageVersion {
   url: string;
   timestamp: Date;
   instruction: string;
+  analysis?: ImageAnalysis;  // 每个版本对应的分析结果
 }
 
 // 成本明细
@@ -99,5 +100,114 @@ export interface ReferenceProduct {
   elements: string[];
   style: string;
   salesTier: 'A' | 'B' | 'C' | 'D';
+}
+
+// ==================== V2 分层Prompt系统 ====================
+
+// 产品类型枚举
+export type ProductType =
+  | 'keychain'
+  | 'bag_charm'
+  | 'phone_strap'
+  | 'car_charm'
+  | 'generic';
+
+// 风格类型枚举
+export type StyleKey =
+  | 'ocean_kawaii'
+  | 'vintage_bohemian'
+  | 'minimalist_modern'
+  | 'luxury_elegant'
+  | 'cute_cartoon'
+  | 'nature_botanical'
+  | 'gothic_dark'
+  | 'festive_holiday';
+
+// 分层Prompt
+export interface LayeredPrompt {
+  identity: string;       // Layer 1: 产品身份锁定
+  structure: string;      // Layer 2: 结构约束
+  materials: string;      // Layer 3: 材质描述
+  style: string;          // Layer 4: 风格定义
+  modification: string;   // Layer 5: 用户修改
+  technical: string;      // Layer 6: 技术参数
+  negative: string;       // 负面提示词
+  full_prompt: string;    // 组装后的完整prompt
+  product_type: string;   // 使用的产品类型
+  style_key: string;      // 使用的风格
+}
+
+// 色彩调色板
+export interface ColorPalette {
+  primary: string[];
+  secondary: string[];
+  accent: string[];
+}
+
+// 产品类型预设
+export interface ProductTypePreset {
+  id: string;
+  name: string;
+  name_en: string;
+  identity: string;
+  typical_hardware: string[];
+  typical_structure: string;
+  default_length_cm: number[];
+  description: string;
+  icon: string;
+}
+
+// 风格预设
+export interface StylePreset {
+  id: string;
+  name: string;
+  name_en: string;
+  keywords: string[];
+  typical_materials: string[];
+  color_palette: ColorPalette;
+  mood_keywords: string[];
+  style_injection: string;
+  icon: string;
+}
+
+// 设计预设（组合产品类型 + 风格）
+export interface DesignPreset {
+  product_type: ProductTypePreset;
+  style: StylePreset;
+}
+
+// 预设列表响应
+export interface PresetListResponse {
+  product_types: ProductTypePreset[];
+  styles: StylePreset[];
+}
+
+// V2 生成请求
+export interface GenerateRequestV2 {
+  instruction: string;
+  reference_image?: string;
+  session_id?: string;
+  product_type?: ProductType;
+  style_key?: StyleKey;
+  include_similar?: boolean;
+  image_size?: string;
+}
+
+// V2 设计响应
+export interface DesignResponseV2 {
+  success: boolean;
+  image_url: string;
+  prompt_used: string;
+  layered_prompt: LayeredPrompt;
+  preset_used: DesignPreset;
+  analysis?: ImageAnalysis;
+  similar_items?: {
+    id: string;
+    imageUrl: string;
+    similarity: number;
+  }[];
+  session_id: string;  // 后端返回的会话ID，用于后续请求
+  message?: string;
+  cost_estimate?: Record<string, unknown>;
 }
 

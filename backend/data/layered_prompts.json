@@ -1,0 +1,167 @@
+{
+  "identity_templates": {
+    "keychain": {
+      "en": "Professional product photography of a decorative keychain charm pendant. This is a hanging keychain accessory, NOT a necklace, bracelet, or earring. Must have attachment hardware for keys.",
+      "constraint": "CRITICAL: This MUST be a keychain charm with lobster clasp or keyring attachment. Do NOT generate necklace, bracelet, earring, or ring."
+    },
+    "bag_charm": {
+      "en": "Professional product photography of a decorative bag charm accessory. This is a hanging bag decoration, NOT jewelry worn on body. Must have carabiner or swivel clasp for bag attachment.",
+      "constraint": "CRITICAL: This MUST be a bag charm with carabiner or clasp attachment. Do NOT generate necklace, bracelet, earring, or ring."
+    },
+    "phone_strap": {
+      "en": "Professional product photography of a decorative phone strap charm. This is a phone accessory with lanyard attachment, NOT body jewelry.",
+      "constraint": "CRITICAL: This MUST be a phone strap with cord/lanyard. Do NOT generate necklace, bracelet, earring, or ring."
+    },
+    "car_charm": {
+      "en": "Professional product photography of a decorative car rearview mirror charm. This is a hanging car accessory, NOT body jewelry.",
+      "constraint": "CRITICAL: This MUST be a car hanging charm. Do NOT generate necklace, bracelet, earring, or ring."
+    },
+    "generic": {
+      "en": "Professional product photography of a decorative hanging charm pendant accessory. This is a charm/pendant for attachment, NOT jewelry worn on body.",
+      "constraint": "CRITICAL: This MUST be a hanging charm accessory. Do NOT generate necklace, bracelet, earring, or ring."
+    }
+  },
+
+  "structure_patterns": {
+    "single_pendant": {
+      "en": "Central focal pendant element with {hardware} attachment, clean minimal design",
+      "description": "单一吊坠式 - 以1-2个主吊坠为视觉焦点"
+    },
+    "beaded_chain": {
+      "en": "Beaded chain structure with multiple decorative beads in sequence, {hardware} attachment at top",
+      "description": "串珠链式 - 珠子依次串联形成整体"
+    },
+    "tassel_style": {
+      "en": "Tassel-based design with hanging fringe elements, decorative accent beads, {hardware} attachment",
+      "description": "流苏垂坠式 - 以流苏为主要装饰元素"
+    },
+    "multi_layer": {
+      "en": "Multi-layered design with multiple strands at different lengths, {hardware} attachment",
+      "description": "多层式 - 多条链/绳并行，各股有不同装饰"
+    },
+    "cluster": {
+      "en": "Clustered charm design with multiple pendants grouped together, {hardware} attachment",
+      "description": "簇状式 - 多个吊坠集中组合"
+    }
+  },
+
+  "material_mappings": {
+    "shell": "natural shell, mother of pearl, abalone shell",
+    "starfish": "resin starfish, natural starfish pendant",
+    "pearl": "freshwater pearl, baroque pearl, pearl beads",
+    "crystal": "faceted crystal, clear crystal, rose quartz",
+    "glass_beads": "glass beads, seed beads, lampwork beads",
+    "wooden_beads": "wooden beads, natural wood, bamboo beads",
+    "metal": "gold-plated metal, silver-toned metal, antique brass",
+    "tassel": "silk tassel, cotton fringe, suede tassel",
+    "stone": "natural stone, semi-precious stone, agate",
+    "acrylic": "acrylic charm, resin pendant, lucite"
+  },
+
+  "hardware_mappings": {
+    "龙虾扣": "lobster clasp",
+    "钥匙环": "split keyring",
+    "登山扣": "carabiner clip",
+    "旋转扣": "swivel clasp",
+    "D扣": "D-ring",
+    "跳环": "jump ring",
+    "延长链": "extension chain"
+  },
+
+  "negative_prompts": [
+    "necklace",
+    "bracelet",
+    "earring",
+    "ring",
+    "worn on body",
+    "worn on neck",
+    "worn on wrist",
+    "worn on finger",
+    "worn on ear",
+    "jewelry on person",
+    "human figure",
+    "human hand",
+    "human body",
+    "cartoon",
+    "illustration",
+    "anime",
+    "sketch",
+    "drawing",
+    "painting",
+    "watercolor",
+    "blurry",
+    "low quality",
+    "distorted",
+    "deformed"
+  ],
+
+  "technical_defaults": {
+    "lighting": "professional studio lighting with soft shadows",
+    "background": "clean white background, gradient white to light gray",
+    "camera": "macro product photography, sharp focus on details",
+    "quality": "4K resolution, high detail, professional quality",
+    "composition": "centered product, full view of charm"
+  },
+
+  "style_injections": {
+    "ocean_kawaii": {
+      "keywords": ["ocean-themed", "kawaii", "cute", "pastel"],
+      "color_palette": ["mint green (#98D8C8)", "ocean blue (#5B9BD5)", "pearl white (#F5F5F5)", "coral pink (#FFB6C1)"],
+      "mood": "fresh, summer, sweet, playful"
+    },
+    "bohemian": {
+      "keywords": ["bohemian", "ethnic", "tribal", "artisan"],
+      "color_palette": ["terracotta (#E2725B)", "olive green (#808000)", "amber (#FFBF00)", "cream (#FFFDD0)"],
+      "mood": "free-spirited, natural, artistic, wanderlust"
+    },
+    "bohemian_natural": {
+      "keywords": ["natural", "organic", "earthy", "rustic"],
+      "color_palette": ["earth brown (#8B4513)", "sage green (#9DC183)", "sand beige (#C2B280)", "ivory (#FFFFF0)"],
+      "mood": "grounded, peaceful, nature-inspired"
+    },
+    "ocean_shell": {
+      "keywords": ["coastal", "beach", "marine", "nautical"],
+      "color_palette": ["deep ocean (#006994)", "sandy beige (#F5DEB3)", "seafoam (#93E9BE)", "pearl (#EAE0C8)"],
+      "mood": "coastal, relaxed, vacation, breezy"
+    },
+    "candy_playful": {
+      "keywords": ["candy", "colorful", "playful", "fun"],
+      "color_palette": ["bubblegum pink (#FFC1CC)", "sky blue (#87CEEB)", "lemon yellow (#FFF44F)", "lavender (#E6E6FA)"],
+      "mood": "cheerful, youthful, energetic, whimsical"
+    },
+    "dreamy_star": {
+      "keywords": ["celestial", "starry", "dreamy", "magical"],
+      "color_palette": ["midnight blue (#191970)", "silver (#C0C0C0)", "soft pink (#FFB6C1)", "gold (#FFD700)"],
+      "mood": "ethereal, romantic, mystical, enchanting"
+    },
+    "minimalist": {
+      "keywords": ["minimalist", "modern", "clean", "simple"],
+      "color_palette": ["black (#000000)", "white (#FFFFFF)", "gold (#FFD700)", "silver (#C0C0C0)"],
+      "mood": "elegant, sophisticated, understated, refined"
+    },
+    "vintage_elegant": {
+      "keywords": ["vintage", "antique", "classic", "timeless"],
+      "color_palette": ["antique gold (#CFB53B)", "burgundy (#800020)", "ivory (#FFFFF0)", "bronze (#CD7F32)"],
+      "mood": "nostalgic, luxurious, romantic, ornate"
+    }
+  },
+
+  "prompt_assembly_order": [
+    "identity",
+    "structure",
+    "materials",
+    "style",
+    "modification",
+    "technical",
+    "negative"
+  ],
+
+  "modification_prefix": "KEY CHANGE (PRIORITY):",
+
+  "negative_prefix": "AVOID:",
+
+  "prompt_format": {
+    "separator": "\n\n",
+    "layer_format": "[{layer_name}]\n{content}"
+  }
+}

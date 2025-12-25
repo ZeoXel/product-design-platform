@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # 模型配置
     CLAUDE_MODEL: str = "claude-3-5-sonnet-20240620"
     NANO_BANANA_MODEL: str = "nano-banana-2"
+    SEEDREAM_MODEL: str = "doubao-seedream-4-5-251128"  # 即梦4绘图模型
+
+    # 图像生成模型选择 (nano_banana / seedream)
+    IMAGE_GENERATION_MODEL: str = "seedream"
 
     # 应用配置
     APP_NAME: str = "AI挂饰设计平台"

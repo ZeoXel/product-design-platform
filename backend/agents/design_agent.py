@@ -1,28 +1,205 @@
 """
 LangChain 设计助手 Agent
-整合Claude分析和Nano Banana生成能力
+整合Claude分析和图像生成能力（支持即梦/Nano Banana）
+增强版：支持分层Prompt和预设系统
 """
+import json
 import uuid
-from typing import Optional, Dict, Any
-from services import claude_service, nano_banana_service
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from config import get_settings
+from services import claude_service, nano_banana_service, seedream_service, preset_service
 from models import (
     AnalysisResult,
     ImageAnalysis,
     GenerationResult,
     DesignResponse,
+    DesignResponseV2,
     AspectRatio,
     ImageSize,
     ChatMessage,
+    LayeredPrompt,
 )
+
+settings = get_settings()
+
+# 专业化 System Prompt 模板
+DESIGN_AGENT_SYSTEM_PROMPT = """你是专业的配饰设计师，专注于挂饰、钥匙扣、包挂等品类。
+
+## 专业知识
+
+**产品品类**：挂饰、钥匙扣、包挂、手机挂绳、车挂、耳机挂饰
+**常见材料**：
+- 主体元素：贝壳、天然石、水晶、亚克力、树脂、珍珠、玛瑙
+- 辅助元素：玻璃珠、管珠、隔珠、流苏、编织绳、毛线球
+- 五金配件：龙虾扣、钥匙环、登山扣、旋转扣、T针、9针、延长链、跳环
+
+**结构类型**：
+- 中心吊坠式：以1-2个主吊坠为视觉焦点，辅以串珠装饰
+- 多股编织式：多条绳/链并行，各股有不同装饰
+- 串珠链式：珠子依次串联，形成整体
+- 流苏垂坠式：以流苏为主要装饰元素
+
+**风格分类**：
+- 海洋风/少女系：贝壳、海星、珍珠、马卡龙色系
+- 波西米亚/民族风：天然石、编织绳、流苏、大地色系
+- 甜美可爱/童趣：糖果色、卡通元素、彩虹配色
+- 简约现代：几何形状、金属元素、单色调
+- 复古典雅：琥珀、巴洛克珍珠、古金色
+
+## 成功案例参考
+
+{few_shot_examples}
+
+## 工作要求
+
+1. **分析图片时**：准确识别元素品类、材质、颜色和数量
+2. **生成 prompt 时**：参考上述成功案例的描述风格和结构
+3. **垂类约束**：确保生成结果符合配饰形态，不要发散成其他品类
+4. **英文 prompt**：使用英文生成 prompt，适合 AI 图像生成模型
+5. **专业术语**：使用配饰行业的专业术语和描述方式
+"""
+
+# 分析用的专业 Prompt
+ANALYSIS_PROMPT = """请详细分析这个挂饰/配饰设计:
+
+1. **主体元素识别**：识别所有主要吊坠和装饰元素（如贝壳、海星、水晶、天然石等）
+   - 明确材质（天然/人造/金属/玻璃/亚克力等）
+   - 描述颜色和渐变
+   - 估计尺寸比例
+
+2. **辅助元素识别**：识别所有辅助装饰（珠子、隔珠、流苏等）
+   - 统计数量（如"玻璃珠×5"）
+   - 描述排列方式
+
+3. **五金配件识别**：识别所有金属件
+   - 扣具类型（龙虾扣/登山扣/旋转扣等）
+   - 连接件（跳环/T针/9针等）
+   - 表面处理（银色/金色/古铜色等）
+
+4. **整体结构分析**：
+   - 结构类型（中心吊坠式/串珠链式/多股编织式等）
+   - 整体长度估计
+
+5. **风格判断**：
+   - 风格标签（如海洋风、波西米亚、少女系等）
+   - 配色方案
+   - 情绪氛围
+
+请以结构化的方式输出分析结果。"""
 
 
 class DesignAgent:
-    """设计助手Agent"""
+    """设计助手Agent - 增强版"""
 
     def __init__(self):
         self.claude = claude_service
-        self.nano_banana = nano_banana_service
+        self.preset_service = preset_service  # 新增：预设服务
+
+        # 根据配置选择图像生成服务
+        self.image_gen_model = getattr(settings, 'IMAGE_GENERATION_MODEL', 'seedream')
+        if self.image_gen_model == 'seedream':
+            self.image_generator = seedream_service
+            print("[Design Agent] 使用即梦4绘图模型")
+        else:
+            self.image_generator = nano_banana_service
+            print("[Design Agent] 使用Nano Banana绘图模型")
+
         self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.few_shot_examples = self._load_few_shot_examples()
+        self.system_prompt = self._build_system_prompt()
+
+        # 新增：使用分层Prompt的标志（默认启用）
+        self.use_layered_prompt = True
+
+    def _load_few_shot_examples(self) -> List[Dict[str, Any]]:
+        """加载 few-shot 示例库"""
+        examples_path = Path(__file__).parent.parent / "data" / "few_shot_examples.json"
+        try:
+            with open(examples_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("examples", [])
+        except FileNotFoundError:
+            print(f"[Design Agent] Warning: few_shot_examples.json not found at {examples_path}")
+            return []
+        except json.JSONDecodeError as e:
+            print(f"[Design Agent] Error parsing few_shot_examples.json: {e}")
+            return []
+
+    def _format_few_shot_examples(self) -> str:
+        """格式化 few-shot 示例为 System Prompt 内容"""
+        if not self.few_shot_examples:
+            return "（暂无示例）"
+
+        formatted = []
+        for i, example in enumerate(self.few_shot_examples, 1):
+            analysis = example.get("analysis", {})
+            primary = ", ".join(analysis.get("primary", []))
+            secondary = ", ".join(analysis.get("secondary", []))
+            hardware = ", ".join(analysis.get("hardware", []))
+            structure = analysis.get("structure", "")
+            style_tags = ", ".join(analysis.get("style_tags", []))
+
+            example_text = f"""【案例{i}】{example.get("name", "")}
+分析结果：
+- 主体元素：{primary}
+- 辅助元素：{secondary}
+- 五金配件：{hardware}
+- 结构类型：{structure}
+- 风格标签：{style_tags}
+
+生成 Prompt：
+{example.get("ideal_prompt", "")}
+"""
+            formatted.append(example_text)
+
+        return "\n".join(formatted)
+
+    def _build_system_prompt(self) -> str:
+        """构建完整的 System Prompt"""
+        examples_text = self._format_few_shot_examples()
+        return DESIGN_AGENT_SYSTEM_PROMPT.format(few_shot_examples=examples_text)
+
+    def _select_few_shot_examples(
+        self,
+        style_key: Optional[str] = None,
+        product_type: Optional[str] = None,
+        max_examples: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        动态选择相关的 few-shot 示例
+
+        Args:
+            style_key: 风格标识
+            product_type: 产品类型
+            max_examples: 最大示例数
+
+        Returns:
+            筛选后的示例列表
+        """
+        if not self.few_shot_examples:
+            return []
+
+        selected = []
+
+        # 1. 优先选择匹配风格的示例
+        if style_key:
+            for example in self.few_shot_examples:
+                if example.get("style") == style_key:
+                    selected.append(example)
+                    if len(selected) >= max_examples:
+                        break
+
+        # 2. 如果不够，补充其他示例
+        if len(selected) < max_examples:
+            for example in self.few_shot_examples:
+                if example not in selected:
+                    selected.append(example)
+                    if len(selected) >= max_examples:
+                        break
+
+        print(f"[Design Agent] Selected {len(selected)} few-shot examples for style={style_key}")
+        return selected
 
     def _get_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         """获取或创建会话"""
@@ -59,16 +236,10 @@ class DesignAgent:
         """
         session = self._get_session(session_id)
 
-        # 调用Claude Vision分析
+        # 调用Claude Vision分析（使用专业化分析Prompt）
         analysis = await self.claude.analyze_image(
             image_base64=image_base64,
-            prompt="""请详细分析这个挂饰/配饰设计:
-
-1. 识别所有视觉元素（贝壳、水晶、珠子、金属件等）
-2. 分析整体风格和色彩方案
-3. 描述结构和排列方式
-4. 评估设计的品质和独特性
-5. 提供可能的改进建议""",
+            prompt=ANALYSIS_PROMPT,
         )
 
         # 查找相似产品（用于市场参考和设计灵感）
@@ -88,7 +259,8 @@ class DesignAgent:
                 )
 
                 if query_embedding is not None:
-                    similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.3)
+                    # 使用较低阈值（文本嵌入相似度通常偏低）
+                    similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.15)
 
                     # 添加相似产品到结果
                     analysis.similarItems = [
@@ -116,16 +288,27 @@ class DesignAgent:
         session_id: Optional[str] = None,
         aspect_ratio: AspectRatio = AspectRatio.RATIO_1_1,
         image_size: ImageSize = ImageSize.SIZE_2K,
+        style_hint: Optional[str] = None,
+        # 新增参数
+        product_type: Optional[str] = None,
+        style_key: Optional[str] = None,
+        include_similar: bool = False,  # 默认不查找相似产品
+        use_layered_prompt: bool = True,  # 默认使用分层Prompt
     ) -> DesignResponse:
         """
-        根据指令生成设计
+        根据指令生成设计 - 增强版
 
         Args:
             instruction: 用户设计指令
             reference_image: 参考图base64
             session_id: 会话ID
             aspect_ratio: 宽高比
+            style_hint: 风格提示（可选，兼容旧版）
             image_size: 图像尺寸
+            product_type: 产品类型ID
+            style_key: 风格ID
+            include_similar: 是否查找相似产品（默认关闭）
+            use_layered_prompt: 是否使用分层Prompt
 
         Returns:
             设计响应
@@ -133,65 +316,113 @@ class DesignAgent:
         session = self._get_session(session_id)
         analysis = None
         similar_items = None
+        layered_prompt_obj = None
 
         try:
-            # 步骤1: 如果有参考图，先分析（包括查找相似产品）
+            # 步骤1: 如果有参考图，先分析
             if reference_image:
-                analysis = await self.analyze_reference(reference_image, session["id"])
-                # 获取相似产品用于生成参考
-                similar_items = analysis.similarItems if hasattr(analysis, 'similarItems') and analysis.similarItems else None
+                # 向量检索现在是可选的
+                analysis = await self.analyze_reference(
+                    reference_image,
+                    session["id"],
+                    include_similar=include_similar
+                )
             elif session.get("analysis"):
                 analysis = session["analysis"]
-                # 尝试从会话中获取相似产品
-                similar_items = getattr(analysis, 'similarItems', None) if analysis else None
 
-            # 如果有相似产品，转换为可用格式
-            similar_for_prompt = None
-            if similar_items:
-                from services.gallery_service import gallery_service
-                similar_for_prompt = []
-                for sim_item in similar_items[:3]:  # 只使用前3个
-                    # 获取完整的产品信息
-                    full_item = gallery_service.get_reference(sim_item.id)
-                    if full_item:
-                        similar_for_prompt.append({
-                            "id": sim_item.id,
-                            "imageUrl": sim_item.imageUrl,
-                            "similarity": sim_item.similarity,
-                            "item": full_item
-                        })
+            # 步骤2: 获取预设（核心改动）
+            detected_product_type = product_type
+            detected_style = style_key or style_hint
 
-            # 步骤2: 生成优化的提示词（包含相似产品参考）
-            design_prompt = await self.claude.generate_design_prompt(
-                user_instruction=instruction,
-                reference_analysis=analysis,
-                similar_items=similar_for_prompt,
-            )
+            if not detected_product_type or not detected_style:
+                # 自动检测预设
+                preset = self.preset_service.auto_detect_preset(
+                    text=instruction,
+                    analysis=analysis
+                )
+                if not detected_product_type:
+                    detected_product_type = preset.product_type.id
+                if not detected_style:
+                    detected_style = preset.style.id
 
-            # 步骤3: 调用Nano Banana生成图像
+            print(f"[Design Agent] Using preset: product_type={detected_product_type}, style={detected_style}")
+
+            # 步骤3: 生成Prompt（核心改动）
+            if use_layered_prompt and self.use_layered_prompt:
+                # 使用分层Prompt（推荐）
+                layered_prompt_obj = self.claude.generate_layered_prompt(
+                    user_instruction=instruction,
+                    reference_analysis=analysis,
+                    product_type=detected_product_type,
+                    style_key=detected_style,
+                )
+                design_prompt = layered_prompt_obj.full_prompt
+                print(f"[Design Agent] Generated layered prompt ({len(design_prompt)} chars)")
+            else:
+                # 兼容旧版：使用原有的prompt生成方式
+                # 如果需要相似产品参考，获取它们
+                similar_for_prompt = None
+                if include_similar and analysis:
+                    similar_items = getattr(analysis, 'similarItems', None)
+                    if similar_items:
+                        from services.gallery_service import gallery_service
+                        similar_for_prompt = []
+                        for sim_item in similar_items[:3]:
+                            full_item = gallery_service.get_reference(sim_item.id)
+                            if full_item:
+                                similar_for_prompt.append({
+                                    "id": sim_item.id,
+                                    "imageUrl": sim_item.imageUrl,
+                                    "similarity": sim_item.similarity,
+                                    "item": full_item
+                                })
+
+                design_prompt = await self.claude.generate_design_prompt(
+                    user_instruction=instruction,
+                    reference_analysis=analysis,
+                    similar_items=similar_for_prompt,
+                )
+
+            # 步骤4: 调用图像生成服务
             reference_images = None
             if reference_image:
                 reference_images = [reference_image]
             elif session.get("current_image"):
                 reference_images = [session["current_image"]]
 
-            generation_result = await self.nano_banana.generate(
-                prompt=design_prompt,
-                reference_images=reference_images,
-                aspect_ratio=aspect_ratio,
-                image_size=image_size,
-            )
+            # 根据不同服务调用不同参数
+            if self.image_gen_model == 'seedream':
+                size_map = {
+                    ImageSize.SIZE_1K: "1K",
+                    ImageSize.SIZE_2K: "2K",
+                    ImageSize.SIZE_4K: "4K",
+                }
+                generation_result = await self.image_generator.generate(
+                    prompt=design_prompt,
+                    reference_images=reference_images,
+                    size=size_map.get(image_size, "2K"),
+                )
+            else:
+                generation_result = await self.image_generator.generate(
+                    prompt=design_prompt,
+                    reference_images=reference_images,
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                )
 
-            # 步骤4: 保存版本历史
+            # 步骤5: 保存版本历史
             session["generated_versions"].append({
                 "instruction": instruction,
                 "prompt": design_prompt,
                 "image_url": generation_result.image_url,
+                "product_type": detected_product_type,
+                "style": detected_style,
             })
 
-            # 步骤5: 估算成本
+            # 步骤6: 估算成本
             cost_estimate = self._estimate_cost(analysis)
 
+            # 返回增强版响应（兼容旧版DesignResponse）
             return DesignResponse(
                 success=True,
                 image_url=generation_result.image_url,
@@ -206,6 +437,120 @@ class DesignAgent:
             print(f"[Design Agent Error] {str(e)}")
             print(f"[Design Agent Traceback] {traceback.format_exc()}")
             return DesignResponse(
+                success=False,
+                message=f"生成失败: {str(e)}",
+            )
+
+    async def generate_design_v2(
+        self,
+        instruction: str,
+        reference_image: Optional[str] = None,
+        session_id: Optional[str] = None,
+        aspect_ratio: AspectRatio = AspectRatio.RATIO_1_1,
+        image_size: ImageSize = ImageSize.SIZE_2K,
+        product_type: Optional[str] = None,
+        style_key: Optional[str] = None,
+        include_similar: bool = False,
+    ) -> DesignResponseV2:
+        """
+        增强版设计生成（返回分层Prompt详情）
+        """
+        session = self._get_session(session_id)
+        analysis = None
+        layered_prompt_obj = None
+
+        try:
+            # 步骤1: 分析参考图
+            if reference_image:
+                analysis = await self.analyze_reference(
+                    reference_image,
+                    session["id"],
+                    include_similar=include_similar
+                )
+            elif session.get("analysis"):
+                analysis = session["analysis"]
+
+            # 步骤2: 获取预设
+            detected_product_type = product_type
+            detected_style = style_key
+
+            if not detected_product_type or not detected_style:
+                preset = self.preset_service.auto_detect_preset(
+                    text=instruction,
+                    analysis=analysis
+                )
+                if not detected_product_type:
+                    detected_product_type = preset.product_type.id
+                if not detected_style:
+                    detected_style = preset.style.id
+
+            # 步骤3: 生成分层Prompt
+            layered_prompt_obj = self.claude.generate_layered_prompt(
+                user_instruction=instruction,
+                reference_analysis=analysis,
+                product_type=detected_product_type,
+                style_key=detected_style,
+            )
+
+            # 步骤4: 图像生成
+            # 优先使用传入的参考图，否则使用 session 中的当前图
+            reference_images = None
+            if reference_image:
+                reference_images = [reference_image]
+            elif session.get("current_image"):
+                reference_images = [session["current_image"]]
+                print(f"[DesignAgent V2] 使用 session 中的参考图")
+
+            if self.image_gen_model == 'seedream':
+                size_map = {
+                    ImageSize.SIZE_1K: "1K",
+                    ImageSize.SIZE_2K: "2K",
+                    ImageSize.SIZE_4K: "4K",
+                }
+                generation_result = await self.image_generator.generate(
+                    prompt=layered_prompt_obj.full_prompt,
+                    reference_images=reference_images,
+                    size=size_map.get(image_size, "2K"),
+                )
+            else:
+                generation_result = await self.image_generator.generate(
+                    prompt=layered_prompt_obj.full_prompt,
+                    reference_images=reference_images,
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                )
+
+            # 步骤5: 保存和返回
+            session["generated_versions"].append({
+                "instruction": instruction,
+                "prompt": layered_prompt_obj.full_prompt,
+                "image_url": generation_result.image_url,
+                "product_type": detected_product_type,
+                "style": detected_style,
+            })
+
+            cost_estimate = self._estimate_cost(analysis)
+
+            return DesignResponseV2(
+                success=True,
+                image_url=generation_result.image_url,
+                analysis=analysis,
+                prompt_used=layered_prompt_obj.full_prompt,
+                layered_prompt=layered_prompt_obj,
+                message="设计生成成功",
+                cost_estimate=cost_estimate,
+                preset_used={
+                    "product_type": detected_product_type,
+                    "style": detected_style,
+                },
+                session_id=session["id"],  # 返回 session_id 以便前端后续使用
+            )
+
+        except Exception as e:
+            import traceback
+            print(f"[Design Agent V2 Error] {str(e)}")
+            print(f"[Design Agent V2 Traceback] {traceback.format_exc()}")
+            return DesignResponseV2(
                 success=False,
                 message=f"生成失败: {str(e)}",
             )
@@ -227,18 +572,16 @@ class DesignAgent:
         """
         session = self._get_session(session_id)
 
-        system_prompt = """你是一个专业的挂饰设计助手。
+        # 使用专业化 System Prompt（包含 few-shot 示例）
+        chat_system_prompt = self.system_prompt + """
 
-你的能力:
-1. 分析参考图片的设计元素和风格
-2. 理解用户的设计需求和修改意图
-3. 提供设计建议和创意灵感
-4. 帮助优化设计方案
+## 对话指南
 
 当用户描述设计需求时，你应该:
 - 确认理解用户的意图
-- 提供专业的设计建议
-- 询问必要的细节（如颜色偏好、风格倾向）
+- 使用配饰专业术语提供建议
+- 询问必要的细节（如颜色偏好、风格倾向、预算范围）
+- 参考成功案例给出具体建议
 - 预估可行性和效果
 
 请用专业但友好的语气回复。"""
@@ -264,7 +607,7 @@ class DesignAgent:
 
         response = await self.claude.chat(
             messages=context_messages,
-            system_prompt=system_prompt,
+            system_prompt=chat_system_prompt,
         )
 
         # 保存对话历史
