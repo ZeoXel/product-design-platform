@@ -18,7 +18,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 // 获取后端基础 URL（不含 /api/v1）
 function getBackendBaseUrl(): string {
-  const apiUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const apiUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
   // 移除 /api/v1 后缀
   return apiUrl.replace(/\/api\/v1$/, '');
 }
