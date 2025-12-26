@@ -8,9 +8,8 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """应用设置"""
 
-    # API配置 - 使用第三方代理入口
-    OPENAI_BASE_URL: str = "https://api.bltcy.ai"
-    OPENAI_API_BASE: str = "https://api.bltcy.ai/v1"
+    # API配置
+    OPENAI_API_BASE: str = "https://api.lsaigc.com/v1"
     OPENAI_API_KEY: str = ""
 
     # 模型配置
