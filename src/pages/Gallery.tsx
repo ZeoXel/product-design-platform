@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ReferenceProduct } from '../types';
-import { api } from '../services/api';
+import { api, getGalleryImageUrl } from '../services/api';
 
 // 将后端数据转换为前端格式
 function transformGalleryItem(item: any): ReferenceProduct {
@@ -10,7 +10,7 @@ function transformGalleryItem(item: any): ReferenceProduct {
 
   return {
     id: item.id,
-    imageUrl: `/gallery/images/${item.filename}`,
+    imageUrl: getGalleryImageUrl(item.filename),
     elements: [...primaryElements, ...secondaryElements],
     style: styleTags[0] || '未分类',
     salesTier: item.salesTier || 'B'

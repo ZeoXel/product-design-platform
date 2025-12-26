@@ -35,3 +35,4 @@ npm-debug.log*
 
 # Lock files (optional - keeping bun.lock)
 package-lock.json
+.vercel

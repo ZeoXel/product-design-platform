@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ReferenceProduct } from '../../types';
-import { api } from '../../services/api';
+import { api, getGalleryImageUrl } from '../../services/api';
 
 const categories = ['全部', '海洋', '极简', '复古', '现代'];
 
@@ -26,7 +26,7 @@ export function GalleryDrawer({ isOpen, onClose, onSelect }: GalleryDrawerProps)
         // 转换 GalleryReference 到 ReferenceProduct 格式
         const transformedProducts: ReferenceProduct[] = response.items.map(item => ({
           id: item.id,
-          imageUrl: `/gallery/images/${item.filename}`,
+          imageUrl: getGalleryImageUrl(item.filename),
           elements: [
             ...item.analysis.elements.primary.map(e => e.type),
             ...item.analysis.elements.secondary.map(e => e.type),

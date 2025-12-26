@@ -16,6 +16,21 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
+// 获取后端基础 URL（不含 /api/v1）
+function getBackendBaseUrl(): string {
+  const apiUrl = import.meta.env.VITE_API_BASE_URL || '';
+  // 移除 /api/v1 后缀
+  return apiUrl.replace(/\/api\/v1$/, '');
+}
+
+/**
+ * 构建图库图片的完整 URL
+ */
+export function getGalleryImageUrl(filename: string): string {
+  const baseUrl = getBackendBaseUrl();
+  return `${baseUrl}/gallery/images/${filename}`;
+}
+
 // ==================== 类型定义 ====================
 
 export interface ChatMessage {
@@ -469,7 +484,7 @@ export async function fetchExplorationSeeds(_intent: string): Promise<SeedItem[]
   // 将图库参考图转换为 SeedItem 格式
   return result.items.map((item, index) => ({
     id: item.id,
-    imageUrl: `/api/v1/gallery/images/${item.filename}`,
+    imageUrl: getGalleryImageUrl(item.filename),
     style: item.analysis?.style?.tags?.[0] || 'unknown',
     styleName: getStyleName(item.analysis?.style?.tags?.[0]),
     salesTier: item.salesTier,
