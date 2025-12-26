@@ -176,19 +176,9 @@ export async function generateDesign(params: {
   style_hint?: StyleHint;
 }): Promise<DesignResponse> {
   try {
-    // 获取风格注入文本
-    const styleInjection = params.style_hint
-      ? getStyleInjection(params.style_hint)
-      : '';
-
-    // 构建 prompt
-    let prompt = params.instruction;
-    if (styleInjection) {
-      prompt = `${styleInjection}\n\n${params.instruction}`;
-    }
-
     // 准备参考图（必须转换为 base64）
     let referenceImages: string[] | undefined;
+    let referenceBase64: string | undefined;
     if (params.reference_image) {
       let imageBase64 = params.reference_image;
 
@@ -206,12 +196,46 @@ export async function generateDesign(params: {
       // 确保是 base64 格式
       if (imageBase64 && !imageBase64.startsWith('http') && !imageBase64.startsWith('/')) {
         referenceImages = [imageBase64];
+        referenceBase64 = imageBase64;
       }
     }
 
-    // 调用直接 API
+    // 步骤1: 如果有参考图，先分析
+    let referenceAnalysis: string | undefined;
+    if (referenceBase64) {
+      try {
+        console.log('[API] 分析参考图...');
+        referenceAnalysis = await directApi.analyzeImage({
+          imageBase64: referenceBase64,
+          prompt: '简要描述这个配饰的主要元素、材质、颜色和风格特点。',
+        });
+        console.log('[API] 参考图分析完成');
+      } catch (e) {
+        console.warn('[API] 参考图分析失败，继续生成:', e);
+      }
+    }
+
+    // 步骤2: 使用 Claude 增强用户指令为专业英文 prompt
+    console.log('[API] 增强 prompt...');
+    const enhancedPrompt = await directApi.enhancePrompt({
+      userInstruction: params.instruction,
+      referenceAnalysis,
+    });
+    console.log('[API] 增强后的 prompt:', enhancedPrompt.substring(0, 100) + '...');
+
+    // 添加风格注入（如果有）
+    const styleInjection = params.style_hint
+      ? getStyleInjection(params.style_hint)
+      : '';
+
+    let finalPrompt = enhancedPrompt;
+    if (styleInjection) {
+      finalPrompt = `${styleInjection}\n\n${enhancedPrompt}`;
+    }
+
+    // 步骤3: 调用图像生成 API
     const result = await directApi.generateImage({
-      prompt,
+      prompt: finalPrompt,
       referenceImages,
       size: params.image_size || '2K',
     });
@@ -237,7 +261,7 @@ export async function generateDesign(params: {
     return {
       success: true,
       image_url: result.imageUrl,
-      prompt_used: result.revisedPrompt || prompt,
+      prompt_used: result.revisedPrompt || finalPrompt,
       analysis,
       message: '生成成功',
     };
