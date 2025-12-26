@@ -26,6 +26,54 @@ import type {
   ExplorationBranch,
 } from '../types';
 
+// ==================== 后端迁移：专业化 Prompt ====================
+
+/**
+ * 分析用的专业 Prompt（从 backend/agents/design_agent.py 迁移）
+ */
+const ANALYSIS_PROMPT = `请详细分析这个挂饰/配饰设计:
+
+1. **主体元素识别**：识别所有主要吊坠和装饰元素（如贝壳、海星、水晶、天然石等）
+   - 明确材质（天然/人造/金属/玻璃/亚克力等）
+   - 描述颜色和渐变
+   - 估计尺寸比例
+
+2. **辅助元素识别**：识别所有辅助装饰（珠子、隔珠、流苏等）
+   - 统计数量（如"玻璃珠×5"）
+   - 描述排列方式
+
+3. **五金配件识别**：识别所有金属件
+   - 扣具类型（龙虾扣/登山扣/旋转扣等）
+   - 连接件（跳环/T针/9针等）
+   - 表面处理（银色/金色/古铜色等）
+
+4. **整体结构分析**：
+   - 结构类型（中心吊坠式/串珠链式/多股编织式等）
+   - 整体长度估计
+
+5. **风格判断**：
+   - 风格标签（如海洋风、波西米亚、少女系等）
+   - 配色方案
+   - 情绪氛围
+
+请以 JSON 格式输出分析结果：
+{
+  "elements": {
+    "primary": [{"type": "元素名", "color": "颜色", "material": "材质"}],
+    "secondary": [{"type": "元素名", "count": 数量}],
+    "hardware": [{"type": "五金件名", "material": "材质"}]
+  },
+  "style": {
+    "tags": ["风格标签1", "风格标签2"],
+    "mood": "整体氛围描述"
+  },
+  "physicalSpecs": {
+    "lengthCm": 估计长度,
+    "weightG": 估计重量
+  },
+  "suggestions": ["设计建议1", "设计建议2"]
+}`;
+
 // ==================== 类型定义 ====================
 
 export interface ChatMessage {
@@ -96,17 +144,63 @@ export interface GenerationResult {
   metadata: Record<string, unknown>;
 }
 
+export interface CostEstimate {
+  material: number;
+  labor: number;
+  total: number;
+  currency: string;
+}
+
 export interface DesignResponse {
   success: boolean;
   image_url?: string;
   analysis?: ImageAnalysis;
   prompt_used?: string;
   message: string;
-  cost_estimate?: {
-    material: number;
-    labor: number;
-    total: number;
-    currency: string;
+  cost_estimate?: CostEstimate;
+}
+
+/**
+ * 估算生产成本（从 backend/agents/design_agent.py 迁移）
+ */
+function estimateCost(analysis: ImageAnalysis | null | undefined): CostEstimate {
+  // 基础成本
+  const baseCost = {
+    material: 8.0,
+    labor: 5.0,
+    total: 13.0,
+  };
+
+  if (!analysis) {
+    return { ...baseCost, currency: 'CNY' };
+  }
+
+  // 根据元素数量调整
+  const elementCount =
+    (analysis.elements.primary?.length || 0) +
+    (analysis.elements.secondary?.length || 0) +
+    (analysis.elements.hardware?.length || 0);
+
+  if (elementCount > 3) {
+    baseCost.material += (elementCount - 3) * 1.5;
+    baseCost.labor += (elementCount - 3) * 1.0;
+  }
+
+  // 根据风格调整
+  const styleTags = (analysis.style?.tags || []).join(' ').toLowerCase();
+  if (styleTags.includes('luxury') || styleTags.includes('premium') || styleTags.includes('高档')) {
+    baseCost.material *= 1.5;
+  } else if (styleTags.includes('minimalist') || styleTags.includes('simple') || styleTags.includes('简约')) {
+    baseCost.material *= 0.8;
+  }
+
+  baseCost.total = baseCost.material + baseCost.labor;
+
+  return {
+    material: Math.round(baseCost.material * 100) / 100,
+    labor: Math.round(baseCost.labor * 100) / 100,
+    total: Math.round(baseCost.total * 100) / 100,
+    currency: 'CNY',
   };
 }
 
@@ -240,29 +334,32 @@ export async function generateDesign(params: {
       size: params.image_size || '2K',
     });
 
-    // 如果生成成功，分析结果图
+    // 步骤4: 分析生成的图片（后端逻辑迁移）
     let analysis: ImageAnalysis | undefined;
     if (result.imageUrl) {
       try {
-        // 将生成的图片转换为 base64 并分析
+        console.log('[API] 正在分析生成的图片...');
         const imageBase64 = await urlToBase64(result.imageUrl);
         const analysisText = await directApi.analyzeImage({
           imageBase64,
-          prompt: '分析这个挂饰设计的元素、材质、风格和结构。返回 JSON 格式。',
+          prompt: ANALYSIS_PROMPT,  // 使用专业化分析 Prompt
         });
-
-        // 尝试解析分析结果
         analysis = parseAnalysisResult(analysisText);
+        console.log('[API] 生成图片分析完成');
       } catch (e) {
         console.warn('[API] 图像分析失败，继续返回生成结果:', e);
       }
     }
+
+    // 步骤5: 估算成本（后端逻辑迁移）
+    const cost_estimate = estimateCost(analysis);
 
     return {
       success: true,
       image_url: result.imageUrl,
       prompt_used: result.revisedPrompt || finalPrompt,
       analysis,
+      cost_estimate,
       message: '生成成功',
     };
   } catch (error) {
@@ -275,38 +372,17 @@ export async function generateDesign(params: {
 }
 
 /**
- * 分析图像（使用 directApi）
+ * 分析图像（使用 directApi，后端逻辑迁移）
  */
 export async function analyzeImage(params: {
   image: string;
   prompt?: string;
   include_similar?: boolean;
 }): Promise<ImageAnalysis> {
-  const systemPrompt = buildDesignSystemPrompt();
-
-  const analysisPrompt = `${params.prompt || '分析这个挂饰设计的元素、材质、风格和结构。'}
-
-请返回 JSON 格式：
-{
-  "elements": {
-    "primary": [{"type": "元素名", "color": "颜色", "material": "材质"}],
-    "secondary": [{"type": "元素名", "count": 数量}],
-    "hardware": [{"type": "五金件名", "material": "材质"}]
-  },
-  "style": {
-    "tags": ["风格标签1", "风格标签2"],
-    "mood": "整体氛围描述"
-  },
-  "physicalSpecs": {
-    "lengthCm": 估计长度,
-    "weightG": 估计重量
-  },
-  "suggestions": ["建议1", "建议2"]
-}`;
-
+  // 使用专业化分析 Prompt（从后端迁移）
   const result = await directApi.analyzeImage({
     imageBase64: params.image,
-    prompt: `${systemPrompt}\n\n${analysisPrompt}`,
+    prompt: params.prompt || ANALYSIS_PROMPT,
   });
 
   // 解析 JSON 结果

@@ -232,12 +232,13 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setVersions([initialVersion]);
     setCurrentVersionId('v0');
 
-    // 调用真实的图像分析 API
+    // 调用真实的图像分析 API（后端迁移：使用专业化分析 Prompt + 相似图）
     setGenerationStep('analyzing');
 
     try {
       const analysis = await api.analyzeImage({
         image: base64,
+        include_similar: true,  // 查找相似图片
       });
 
       setImageAnalysis(analysis);
@@ -629,16 +630,33 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
         setVersions(prev => [...prev, newVersion]);
         setCurrentVersionId(newVersion.id);
 
-        // 处理分析结果（后端已在生成后分析图片）
+        // 处理分析结果（后端迁移：生成后自动分析图片）
         if (result.analysis) {
           setImageAnalysis(result.analysis);
           // 更新版本的分析结果
           setVersions(prev => prev.map(v =>
             v.id === newVersionId ? { ...v, analysis: result.analysis } : v
           ));
-          console.log('[Generate] 使用后端返回的分析结果');
-        } else {
-          console.log('[Generate] 后端未返回分析结果');
+          console.log('[Generate] 使用返回的分析结果');
+        }
+
+        // 处理成本估算（后端迁移：基于分析结果估算成本）
+        if (result.cost_estimate) {
+          // 适配前端 CostBreakdown 类型
+          setCostBreakdown({
+            materials: [
+              { name: '材料成本', quantity: 1, unitPrice: result.cost_estimate.material, total: result.cost_estimate.material }
+            ],
+            labor: {
+              timeMinutes: 30,  // 估计制作时间
+              hourlyRate: result.cost_estimate.labor * 2,  // 换算为时薪
+              total: result.cost_estimate.labor,
+            },
+            apiCost: 0.15,  // API 调用成本
+            totalCost: result.cost_estimate.total,
+            currency: result.cost_estimate.currency,
+          });
+          console.log('[Generate] 成本估算:', result.cost_estimate);
         }
 
         // 添加成功消息（不在对话框显示图片，图片仅在左侧预览区展示）
