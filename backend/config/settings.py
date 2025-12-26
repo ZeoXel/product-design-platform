@@ -26,7 +26,14 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # CORS配置
-    CORS_ORIGINS: list = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3010", "http://127.0.0.1:3010"]
+    CORS_ORIGINS: list = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3010",
+        "http://127.0.0.1:3010",
+        "https://product-design-platform.vercel.app",
+        "https://product-design-platform-zeoxels-projects.vercel.app",
+    ]
 
     class Config:
         env_file = ("../.env", ".env")
