@@ -1,6 +1,18 @@
 /**
  * API 客户端服务
+ * 纯前端模式：直接从浏览器调用 API，无需后端服务器
  */
+
+import * as directApi from './directApi';
+import { isApiConfigured } from '../store/apiSettings';
+import {
+  getGalleryItems,
+  getGalleryImageUrl as getStaticGalleryImageUrl,
+} from './galleryService';
+import {
+  buildDesignSystemPrompt,
+  getStyleInjection,
+} from './presetsService';
 
 import type {
   ProductType,
@@ -13,23 +25,6 @@ import type {
   SeedItem,
   ExplorationBranch,
 } from '../types';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-
-// 获取后端基础 URL（不含 /api/v1）
-function getBackendBaseUrl(): string {
-  const apiUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
-  // 移除 /api/v1 后缀
-  return apiUrl.replace(/\/api\/v1$/, '');
-}
-
-/**
- * 构建图库图片的完整 URL
- */
-export function getGalleryImageUrl(filename: string): string {
-  const baseUrl = getBackendBaseUrl();
-  return `${baseUrl}/gallery/images/${filename}`;
-}
 
 // ==================== 类型定义 ====================
 
@@ -104,7 +99,7 @@ export interface GenerationResult {
 export interface DesignResponse {
   success: boolean;
   image_url?: string;
-  analysis?: ImageAnalysis;  // 使用新格式
+  analysis?: ImageAnalysis;
   prompt_used?: string;
   message: string;
   cost_estimate?: {
@@ -137,40 +132,6 @@ export interface ChatResponse {
 export type AspectRatio = '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '2:3' | '3:2' | '4:5' | '5:4' | '21:9';
 export type ImageSize = '1K' | '2K' | '4K';
 
-// ==================== API 请求函数 ====================
-
-/**
- * 通用请求函数
- */
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: '请求失败' }));
-    throw new Error(error.detail || '请求失败');
-  }
-
-  return response.json();
-}
-
-/**
- * 健康检查
- */
-export async function healthCheck(): Promise<{ status: string; service: string }> {
-  return request('/health');
-}
-
 // 风格类型定义
 export type StyleHint =
   | 'ocean_kawaii'
@@ -182,8 +143,29 @@ export type StyleHint =
   | 'minimalist'
   | 'vintage_elegant';
 
+// ==================== 图库图片 URL ====================
+
 /**
- * 生成设计
+ * 构建图库图片的完整 URL（使用静态资源）
+ */
+export function getGalleryImageUrl(filename: string): string {
+  return getStaticGalleryImageUrl(filename);
+}
+
+// ==================== API 请求函数 ====================
+
+/**
+ * 健康检查（检查 API 配置是否有效）
+ */
+export async function healthCheck(): Promise<{ status: string; service: string }> {
+  if (isApiConfigured()) {
+    return { status: 'ok', service: 'frontend-direct' };
+  }
+  throw new Error('API 未配置');
+}
+
+/**
+ * 生成设计（使用 directApi）
  */
 export async function generateDesign(params: {
   instruction: string;
@@ -193,35 +175,109 @@ export async function generateDesign(params: {
   image_size?: ImageSize;
   style_hint?: StyleHint;
 }): Promise<DesignResponse> {
-  return request('/generate', {
-    method: 'POST',
-    body: JSON.stringify({
-      instruction: params.instruction,
-      reference_image: params.reference_image,
-      session_id: params.session_id,
-      aspect_ratio: params.aspect_ratio || '1:1',
-      image_size: params.image_size || '2K',
-      style_hint: params.style_hint,
-    }),
-  });
+  try {
+    // 获取风格注入文本
+    const styleInjection = params.style_hint
+      ? getStyleInjection(params.style_hint)
+      : '';
+
+    // 构建 prompt
+    let prompt = params.instruction;
+    if (styleInjection) {
+      prompt = `${styleInjection}\n\n${params.instruction}`;
+    }
+
+    // 准备参考图
+    const referenceImages = params.reference_image
+      ? [params.reference_image]
+      : undefined;
+
+    // 调用直接 API
+    const result = await directApi.generateImage({
+      prompt,
+      referenceImages,
+      size: params.image_size || '2K',
+    });
+
+    // 如果生成成功，分析结果图
+    let analysis: ImageAnalysis | undefined;
+    if (result.imageUrl) {
+      try {
+        // 将生成的图片转换为 base64 并分析
+        const imageBase64 = await urlToBase64(result.imageUrl);
+        const analysisText = await directApi.analyzeImage({
+          imageBase64,
+          prompt: '分析这个挂饰设计的元素、材质、风格和结构。返回 JSON 格式。',
+        });
+
+        // 尝试解析分析结果
+        analysis = parseAnalysisResult(analysisText);
+      } catch (e) {
+        console.warn('[API] 图像分析失败，继续返回生成结果:', e);
+      }
+    }
+
+    return {
+      success: true,
+      image_url: result.imageUrl,
+      prompt_used: result.revisedPrompt || prompt,
+      analysis,
+      message: '生成成功',
+    };
+  } catch (error) {
+    console.error('[API] 生成失败:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '生成失败',
+    };
+  }
 }
 
 /**
- * 分析图像（返回新的结构化格式）
+ * 分析图像（使用 directApi）
  */
 export async function analyzeImage(params: {
   image: string;
   prompt?: string;
   include_similar?: boolean;
 }): Promise<ImageAnalysis> {
-  const url = `/analyze${params.include_similar === true ? '?include_similar=true' : ''}`;
-  return request(url, {
-    method: 'POST',
-    body: JSON.stringify({
-      image: params.image,
-      prompt: params.prompt || '分析这个挂饰设计的元素、风格和结构',
-    }),
+  const systemPrompt = buildDesignSystemPrompt();
+
+  const analysisPrompt = `${params.prompt || '分析这个挂饰设计的元素、材质、风格和结构。'}
+
+请返回 JSON 格式：
+{
+  "elements": {
+    "primary": [{"type": "元素名", "color": "颜色", "material": "材质"}],
+    "secondary": [{"type": "元素名", "count": 数量}],
+    "hardware": [{"type": "五金件名", "material": "材质"}]
+  },
+  "style": {
+    "tags": ["风格标签1", "风格标签2"],
+    "mood": "整体氛围描述"
+  },
+  "physicalSpecs": {
+    "lengthCm": 估计长度,
+    "weightG": 估计重量
+  },
+  "suggestions": ["建议1", "建议2"]
+}`;
+
+  const result = await directApi.analyzeImage({
+    imageBase64: params.image,
+    prompt: `${systemPrompt}\n\n${analysisPrompt}`,
   });
+
+  // 解析 JSON 结果
+  const analysis = parseAnalysisResult(result);
+
+  // 如果需要相似图，从静态图库中查找
+  if (params.include_similar) {
+    const similarItems = findSimilarFromGallery(analysis);
+    analysis.similarItems = similarItems;
+  }
+
+  return analysis;
 }
 
 /**
@@ -233,39 +289,58 @@ export async function generateImage(params: {
   aspect_ratio?: AspectRatio;
   image_size?: ImageSize;
 }): Promise<GenerationResult> {
-  return request('/image/generate', {
-    method: 'POST',
-    body: JSON.stringify({
-      prompt: params.prompt,
-      reference_images: params.reference_images,
-      aspect_ratio: params.aspect_ratio || '1:1',
-      image_size: params.image_size || '2K',
-    }),
+  const result = await directApi.generateImage({
+    prompt: params.prompt,
+    referenceImages: params.reference_images,
+    size: params.image_size || '2K',
   });
+
+  return {
+    image_url: result.imageUrl,
+    prompt_used: result.revisedPrompt || params.prompt,
+    metadata: {},
+  };
 }
 
 /**
- * 与设计助手对话
+ * 与设计助手对话（使用 directApi）
  */
 export async function chat(params: {
   messages: ChatMessage[];
   session_id?: string;
   context?: ChatContext;
 }): Promise<ChatResponse> {
-  return request('/chat', {
-    method: 'POST',
-    body: JSON.stringify({
-      messages: params.messages,
-      session_id: params.session_id,
-      context: params.context,
-    }),
+  const systemPrompt = buildDesignSystemPrompt(params.context?.selected_style);
+
+  // 构建上下文信息
+  let contextInfo = '';
+  if (params.context?.analysis) {
+    contextInfo = `\n\n当前分析结果：
+- 主体元素：${params.context.analysis.elements.primary.map(e => e.type).join(', ')}
+- 风格标签：${params.context.analysis.style.tags.join(', ')}
+- 氛围：${params.context.analysis.style.mood}`;
+  }
+
+  const result = await directApi.chatCompletion({
+    messages: params.messages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    })),
+    systemPrompt: systemPrompt + contextInfo,
+    temperature: 0.7,
+    maxTokens: 2048,
   });
+
+  return {
+    message: result,
+    session_id: params.session_id || Date.now().toString(),
+  };
 }
 
 /**
- * 获取会话版本历史
+ * 获取会话版本历史（前端模式下返回空）
  */
-export async function getSessionVersions(sessionId: string): Promise<{
+export async function getSessionVersions(_sessionId: string): Promise<{
   session_id: string;
   versions: Array<{
     instruction: string;
@@ -273,7 +348,11 @@ export async function getSessionVersions(sessionId: string): Promise<{
     image_url: string;
   }>;
 }> {
-  return request(`/session/${sessionId}/versions`);
+  // 前端模式下，版本历史由 Workspace 组件管理
+  return {
+    session_id: _sessionId,
+    versions: [],
+  };
 }
 
 /**
@@ -295,7 +374,6 @@ export function fileToBase64(file: File): Promise<string> {
 
 /**
  * 将图片 URL 转换为 base64
- * 用于图库选择后的图生图场景
  */
 export async function urlToBase64(url: string): Promise<string> {
   try {
@@ -318,70 +396,95 @@ export async function urlToBase64(url: string): Promise<string> {
   }
 }
 
+// ==================== 图库管理（使用静态数据）====================
+
 /**
- * 上传参考图到图库
+ * 上传参考图到图库（前端模式暂不支持）
  */
-export async function uploadReference(params: {
+export async function uploadReference(_params: {
   file: File;
   salesTier?: 'A' | 'B' | 'C';
 }): Promise<{ success: boolean; reference: GalleryReference }> {
-  const formData = new FormData();
-  formData.append('image', params.file);
-  if (params.salesTier) {
-    formData.append('sales_tier', params.salesTier);
-  }
-
-  const response = await fetch(`${API_BASE_URL}/gallery/references`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: '上传失败' }));
-    throw new Error(error.detail || '上传失败');
-  }
-
-  return response.json();
+  throw new Error('前端模式暂不支持上传图片');
 }
 
 /**
- * 列出图库参考图
+ * 列出图库参考图（使用静态数据）
  */
 export async function listReferences(params?: {
   style?: string;
   salesTier?: 'A' | 'B' | 'C';
   limit?: number;
 }): Promise<{ success: boolean; items: GalleryReference[]; total: number }> {
-  const searchParams = new URLSearchParams();
-  if (params?.style) searchParams.set('style', params.style);
-  if (params?.salesTier) searchParams.set('sales_tier', params.salesTier);
-  if (params?.limit) searchParams.set('limit', params.limit.toString());
+  let items = getGalleryItems();
 
-  const url = `/gallery/references${searchParams.toString() ? `?${searchParams}` : ''}`;
-  return request(url);
+  // 按风格筛选
+  if (params?.style) {
+    items = items.filter(item =>
+      item.analysis.style.tags.some(tag =>
+        tag.toLowerCase().includes(params.style!.toLowerCase())
+      )
+    );
+  }
+
+  // 按销售等级筛选
+  if (params?.salesTier) {
+    items = items.filter(item => item.salesTier === params.salesTier);
+  }
+
+  // 限制数量
+  if (params?.limit) {
+    items = items.slice(0, params.limit);
+  }
+
+  // 转换为 GalleryReference 格式
+  const references: GalleryReference[] = items.map(item => ({
+    id: item.id,
+    filename: item.filename,
+    uploadTime: item.uploadTime,
+    analysis: convertGalleryAnalysis(item.analysis),
+    salesTier: item.salesTier as 'A' | 'B' | 'C',
+  }));
+
+  return {
+    success: true,
+    items: references,
+    total: getGalleryItems().length,
+  };
 }
 
 /**
  * 获取参考图详情
  */
 export async function getReference(refId: string): Promise<GalleryReference> {
-  return request(`/gallery/references/${refId}`);
+  const items = getGalleryItems();
+  const item = items.find(i => i.id === refId);
+
+  if (!item) {
+    throw new Error('参考图不存在');
+  }
+
+  return {
+    id: item.id,
+    filename: item.filename,
+    uploadTime: item.uploadTime,
+    analysis: convertGalleryAnalysis(item.analysis),
+    salesTier: item.salesTier as 'A' | 'B' | 'C',
+  };
 }
 
 /**
- * 删除参考图
+ * 删除参考图（前端模式暂不支持）
  */
-export async function deleteReference(refId: string): Promise<{ success: boolean }> {
-  return request(`/gallery/references/${refId}`, {
-    method: 'DELETE',
-  });
+export async function deleteReference(_refId: string): Promise<{ success: boolean }> {
+  throw new Error('前端模式暂不支持删除图片');
 }
 
 /**
- * 查找相似图片
+ * 查找相似图片（从静态图库中基于风格标签匹配）
  */
 export async function findSimilar(params: {
-  image: string;  // base64
+  image: string;
   topK?: number;
   threshold?: number;
 }): Promise<{
@@ -393,23 +496,47 @@ export async function findSimilar(params: {
     item: GalleryReference;
   }>;
 }> {
-  return request('/gallery/similar', {
-    method: 'POST',
-    body: JSON.stringify({
-      image: params.image,
-      top_k: params.topK || 5,
-      threshold: params.threshold || 0.5,
-    }),
+  // 先分析上传的图片
+  const analysis = await analyzeImage({ image: params.image });
+
+  // 从静态图库中查找相似
+  const similarItems = findSimilarFromGallery(analysis, params.topK || 5);
+
+  const items = getGalleryItems();
+  const similar = similarItems.map(s => {
+    const item = items.find(i => i.id === s.id);
+    return {
+      id: s.id,
+      imageUrl: s.imageUrl,
+      similarity: s.similarity,
+      item: item ? {
+        id: item.id,
+        filename: item.filename,
+        uploadTime: item.uploadTime,
+        analysis: convertGalleryAnalysis(item.analysis),
+        salesTier: item.salesTier as 'A' | 'B' | 'C',
+      } : {} as GalleryReference,
+    };
   });
+
+  return {
+    success: true,
+    similar,
+  };
 }
 
-// ==================== V2 预设系统 API ====================
+// ==================== 预设系统（使用静态数据）====================
 
 /**
  * 获取所有预设列表
  */
 export async function getPresets(): Promise<PresetListResponse> {
-  return request('/presets');
+  // 返回静态预设数据的结构
+  return {
+    success: true,
+    product_types: [],
+    styles: [],
+  } as unknown as PresetListResponse;
 }
 
 /**
@@ -419,7 +546,12 @@ export async function getProductTypes(): Promise<{
   success: boolean;
   product_types: ProductTypePreset[];
 }> {
-  return request('/presets/product-types');
+  const { getProductTypes: getTypes } = await import('./presetsService');
+  const types = getTypes();
+  return {
+    success: true,
+    product_types: types as unknown as ProductTypePreset[],
+  };
 }
 
 /**
@@ -429,21 +561,27 @@ export async function getStyles(): Promise<{
   success: boolean;
   styles: StylePreset[];
 }> {
-  return request('/presets/styles');
+  const { getStylePresets } = await import('./presetsService');
+  const styles = getStylePresets();
+  return {
+    success: true,
+    styles: styles as unknown as StylePreset[],
+  };
 }
 
 /**
  * 获取指定的组合预设
  */
 export async function getPreset(
-  productType: ProductType,
-  style: StyleKey
+  _productType: ProductType,
+  _style: StyleKey
 ): Promise<DesignPreset> {
-  return request(`/presets/${productType}/${style}`);
+  // 返回空预设
+  return {} as DesignPreset;
 }
 
 /**
- * V2 设计生成（分层Prompt + 预设系统）
+ * V2 设计生成
  */
 export async function generateDesignV2(params: {
   instruction: string;
@@ -454,41 +592,36 @@ export async function generateDesignV2(params: {
   include_similar?: boolean;
   image_size?: string;
 }): Promise<DesignResponseV2> {
-  return request('/generate/v2', {
-    method: 'POST',
-    body: JSON.stringify({
-      instruction: params.instruction,
-      reference_image: params.reference_image,
-      session_id: params.session_id,
-      product_type: params.product_type || 'keychain',
-      style_key: params.style_key || 'ocean_kawaii',
-      include_similar: params.include_similar ?? false,
-      image_size: params.image_size || '2K',
-    }),
+  const result = await generateDesign({
+    instruction: params.instruction,
+    reference_image: params.reference_image,
+    session_id: params.session_id,
+    style_hint: params.style_key as StyleHint,
+    image_size: (params.image_size || '2K') as ImageSize,
   });
+
+  return result as unknown as DesignResponseV2;
 }
 
 // ==================== 探索模式 API ====================
 
 /**
- * 获取探索模式种子（基于设计意图查找匹配的素材库参考图）
+ * 获取探索模式种子
  */
 export async function fetchExplorationSeeds(_intent: string): Promise<SeedItem[]> {
-  // 先获取图库列表，然后转换为 SeedItem 格式
   const result = await listReferences({ limit: 8 });
 
   if (!result.success || !result.items) {
     return [];
   }
 
-  // 将图库参考图转换为 SeedItem 格式
   return result.items.map((item, index) => ({
     id: item.id,
     imageUrl: getGalleryImageUrl(item.filename),
     style: item.analysis?.style?.tags?.[0] || 'unknown',
     styleName: getStyleName(item.analysis?.style?.tags?.[0]),
     salesTier: item.salesTier,
-    similarity: 0.95 - index * 0.05, // 模拟相似度递减
+    similarity: 0.95 - index * 0.05,
     tags: [
       ...(item.analysis?.elements?.primary?.map(e => e.type) || []),
       ...(item.analysis?.style?.tags?.slice(0, 2) || []),
@@ -512,13 +645,15 @@ function getStyleName(styleKey?: string): string {
     ocean: '海洋风',
     cute: '可爱风',
     natural: '自然风',
+    '海洋风': '海洋风',
+    '波西米亚': '波西米亚风',
+    '少女系': '少女系',
   };
-  return styleNames[styleKey || ''] || '未知风格';
+  return styleNames[styleKey || ''] || styleKey || '未知风格';
 }
 
 /**
  * 发散生成探索分支
- * 从选定的种子起点生成多个设计变体
  */
 export async function generateExplorationBranches(params: {
   seedImageUrl: string;
@@ -527,7 +662,6 @@ export async function generateExplorationBranches(params: {
 }): Promise<ExplorationBranch[]> {
   const { seedImageUrl, intent, count = 4 } = params;
 
-  // 将种子图片转换为 base64
   let seedBase64: string;
   try {
     seedBase64 = await urlToBase64(seedImageUrl);
@@ -536,7 +670,6 @@ export async function generateExplorationBranches(params: {
     throw new Error('无法加载种子图片');
   }
 
-  // 并行生成多个变体
   const generatePromises = Array.from({ length: count }, async (_, i) => {
     try {
       const result = await generateDesign({
@@ -563,6 +696,92 @@ export async function generateExplorationBranches(params: {
 
   const results = await Promise.all(generatePromises);
   return results.filter((b): b is ExplorationBranch => b !== null);
+}
+
+// ==================== 辅助函数 ====================
+
+/**
+ * 转换图库分析格式为 API 格式
+ */
+function convertGalleryAnalysis(galleryAnalysis: {
+  elements: { primary: unknown[]; secondary: unknown[]; hardware: unknown[] };
+  style: { tags: string[]; mood: string };
+  physicalSpecs: { lengthCm: number; weightG: number };
+  suggestions: string[];
+  similarItems?: string[] | null;
+}): ImageAnalysis {
+  return {
+    elements: galleryAnalysis.elements as ImageAnalysis['elements'],
+    style: galleryAnalysis.style,
+    physicalSpecs: galleryAnalysis.physicalSpecs,
+    suggestions: galleryAnalysis.suggestions,
+    // similarItems 在图库格式中是 string[] 或 null，需要忽略或转换
+    similarItems: undefined,
+  };
+}
+
+/**
+ * 解析分析结果 JSON
+ */
+function parseAnalysisResult(text: string): ImageAnalysis {
+  try {
+    // 尝试从文本中提取 JSON
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        elements: parsed.elements || { primary: [], secondary: [], hardware: [] },
+        style: parsed.style || { tags: [], mood: '' },
+        physicalSpecs: parsed.physicalSpecs || { lengthCm: 15, weightG: 10 },
+        suggestions: parsed.suggestions || [],
+      };
+    }
+  } catch (e) {
+    console.warn('[parseAnalysisResult] JSON 解析失败，使用默认值:', e);
+  }
+
+  // 返回默认结构
+  return {
+    elements: { primary: [], secondary: [], hardware: [] },
+    style: { tags: ['未识别'], mood: text.substring(0, 100) },
+    physicalSpecs: { lengthCm: 15, weightG: 10 },
+    suggestions: ['请提供更清晰的图片以获得更准确的分析'],
+  };
+}
+
+/**
+ * 从静态图库中查找相似项目（基于风格标签匹配）
+ */
+function findSimilarFromGallery(
+  analysis: ImageAnalysis,
+  topK: number = 5
+): Array<{ id: string; imageUrl: string; similarity: number }> {
+  const items = getGalleryItems();
+  const inputTags = new Set(analysis.style.tags.map(t => t.toLowerCase()));
+
+  // 计算每个图库项目与输入的相似度
+  const scored = items.map(item => {
+    const itemTags = new Set(item.analysis.style.tags.map(t => t.toLowerCase()));
+
+    // 计算标签交集
+    const intersection = [...inputTags].filter(t => itemTags.has(t)).length;
+    const union = new Set([...inputTags, ...itemTags]).size;
+
+    // Jaccard 相似度
+    const similarity = union > 0 ? intersection / union : 0;
+
+    return {
+      id: item.id,
+      imageUrl: getStaticGalleryImageUrl(item.filename),
+      similarity: Math.round(similarity * 100) / 100,
+    };
+  });
+
+  // 按相似度排序并返回前 K 个
+  return scored
+    .filter(s => s.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, topK);
 }
 
 // 导出API对象

@@ -1,0 +1,101 @@
+{
+  "examples": [
+    {
+      "id": "example_ocean_kawaii",
+      "name": "海洋风少女钥匙扣",
+      "style": "ocean_kawaii",
+      "source_id": "81934b51-6b2f-45bf-bfbf-497240c5f689",
+      "analysis": {
+        "primary": ["薄荷绿海豚吊坠", "奶白色海星吊坠", "透明白爱心珠"],
+        "secondary": ["圆形珠子×12", "管珠×2"],
+        "hardware": ["合金龙虾扣", "金属旋转扣环", "银色连接圈"],
+        "structure": "中心吊坠式串珠",
+        "style_tags": ["海洋风", "少女系", "甜美可爱", "夏日清新", "马卡龙色系"]
+      },
+      "ideal_prompt": "A kawaii ocean-themed keychain charm with mint green dolphin pendant and cream white starfish pendant as focal points, decorated with transparent heart bead, 12 round glass beads in pastel pink and blue tones, 2 tube beads as accents, silver lobster clasp and swivel ring attachment, macaroon color palette with soft pink blue and white, product photography, pure white background, centered composition, soft diffused studio lighting, 12cm total length"
+    },
+    {
+      "id": "example_bohemian_vintage",
+      "name": "波西米亚复古包挂",
+      "style": "bohemian",
+      "source_id": "截屏2025-12-23 18.25.02",
+      "analysis": {
+        "primary": ["棕色透明琥珀树脂花朵", "米白色巴洛克珍珠", "红色珊瑚红玛瑙", "棕橙混色编织球体"],
+        "secondary": ["淡水珍珠串×6", "黄色珐琅珠×1", "条纹玻璃珠×1", "琥珀色珠子×1", "小金属隔珠×4", "编织绳流苏×1"],
+        "hardware": ["金色合金龙虾扣", "金色金属环扣", "金色跳环连接"],
+        "structure": "多元素垂挂式",
+        "style_tags": ["波西米亚", "民族复古", "手工艺术", "混搭创意", "自然系"]
+      },
+      "ideal_prompt": "A bohemian vintage bag charm with amber resin flower pendant, baroque pearl in cream white, red coral agate bead, and woven rattan ball as main elements, decorated with 6 freshwater pearls strand, yellow enamel bead, striped glass bead, amber colored beads, 4 small gold spacer beads, braided cord tassel, antique gold lobster clasp and ring attachments, warm earth tone color palette with brown amber gold and cream, artisan handcrafted style, product photography, white background, natural lighting, 16cm length"
+    },
+    {
+      "id": "example_ocean_shell",
+      "name": "海洋贝壳钥匙扣",
+      "style": "ocean_shell",
+      "source_id": "截屏2025-12-23 18.24.22",
+      "analysis": {
+        "primary": ["橙红渐变白色天然贝壳", "粉白色扇贝吊坠"],
+        "secondary": ["玻璃珠×15", "星星金属片×2", "贝壳造型金属珠×1", "透明水晶珠×3", "海星吊坠×1"],
+        "hardware": ["合金龙虾扣", "粉色涂层钥匙圈", "银色连接环", "合金T针/9针"],
+        "structure": "中心吊坠式串珠",
+        "style_tags": ["海洋风", "少女系", "清新甜美", "夏日海滩", "梦幻童话"]
+      },
+      "ideal_prompt": "A dreamy ocean-themed keychain charm with natural shell pendant in orange-red gradient to white, pink-white scallop shell pendant as focal points, decorated with 15 glass beads in pink and mint colors, 2 golden star metal charms, 1 shell-shaped metal bead, 3 clear crystal beads, 1 starfish charm, pink coated keyring and silver lobster clasp, romantic coastal color palette with coral pink mint white, product photography, pure white background, soft feminine lighting, 18cm total length"
+    },
+    {
+      "id": "example_bohemian_butterfly",
+      "name": "波西米亚蝴蝶挂饰",
+      "style": "bohemian_natural",
+      "source_id": "截屏2025-12-23 18.25.16",
+      "analysis": {
+        "primary": ["绿色天然石蝴蝶造型", "米白色天然石蝴蝶造型", "棕褐色天然石蝴蝶造型"],
+        "secondary": ["编织绳×3", "编织流苏×3", "圆形天然石珠×9", "椭圆形天然石珠×6", "花朵装饰×3", "金属小珠装饰×15"],
+        "hardware": ["合金龙虾扣挂钩", "合金金属连接圈", "合金金属垫片"],
+        "structure": "多股编织流苏式",
+        "style_tags": ["波西米亚风", "民族风", "手工编织", "自然风", "复古"]
+      },
+      "ideal_prompt": "A bohemian natural style bag charm with 3 butterfly-shaped natural stone pendants in green cream and brown colors, decorated with 3 braided cords with tassels, 9 round natural stone beads, 6 oval natural stone beads, 3 flower decorations, 15 small gold metal spacer beads, lobster clasp and metal ring attachments, earthy natural color palette with sage green cream brown, handwoven artisan style, product photography, white background, warm natural lighting, 18cm length with flowing tassels"
+    },
+    {
+      "id": "example_candy_playful",
+      "name": "糖果色童趣挂饰",
+      "style": "candy_playful",
+      "source_id": "截屏2025-12-23 18.25.07",
+      "analysis": {
+        "primary": ["粉色花朵造型珠", "黄色水滴形树脂珠", "红色水滴形玛瑙珠", "透明粉白不规则造型珠"],
+        "secondary": ["彩虹编织绳×1", "珍珠×4", "金属珠×3", "琉璃珠×2", "毛线球装饰×1"],
+        "hardware": ["金属龙虾扣", "金色装饰扣环"],
+        "structure": "编织绳串珠式",
+        "style_tags": ["童趣", "手工编织", "波西米亚", "糖果色系", "混搭"]
+      },
+      "ideal_prompt": "A playful candy-colored charm with pink flower bead, yellow teardrop resin bead, red teardrop agate bead, translucent pink-white irregular shaped bead as main elements, decorated with rainbow braided cord, 4 pearls, 3 gold metal beads, 2 glass beads, 1 yarn pom-pom decoration, gold lobster clasp and decorative ring, vibrant candy color palette with pink yellow red and rainbow accents, whimsical handcrafted style, product photography, white background, cheerful bright lighting, 18cm length"
+    },
+    {
+      "id": "example_dreamy_star",
+      "name": "梦幻星空钥匙扣",
+      "style": "dreamy_star",
+      "source_id": "截屏2025-12-23 18.23.50",
+      "analysis": {
+        "primary": ["天蓝色小圆珠串"],
+        "secondary": ["星星吊坠×2", "点缀珠×4"],
+        "hardware": ["金属钥匙扣环", "银色圆形铭牌", "金属连接环"],
+        "structure": "简约串珠式",
+        "style_tags": ["少女", "清新", "梦幻", "可爱", "星空"]
+      },
+      "ideal_prompt": "A dreamy starry keychain charm with sky blue small round beads as main element, decorated with 2 golden star pendants, 4 pink accent beads, silver round metal tag charm, metal keyring and connector rings, celestial color palette with sky blue gold and soft pink, minimalist kawaii style, product photography, pure white background, soft ethereal lighting, 15cm total length, lightweight and delicate design"
+    }
+  ],
+  "meta": {
+    "version": "1.0",
+    "created_at": "2025-12-25",
+    "description": "配饰设计 Few-shot 示例库，用于增强 Agent 的专业能力",
+    "coverage": {
+      "ocean_kawaii": "海洋风少女系",
+      "bohemian": "波西米亚民族风",
+      "ocean_shell": "海洋贝壳系",
+      "bohemian_natural": "波西米亚自然系",
+      "candy_playful": "糖果色童趣系",
+      "dreamy_star": "梦幻星空系"
+    }
+  }
+}

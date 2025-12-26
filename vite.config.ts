@@ -5,16 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      // API 请求代理到后端
-      '/api': {
-        target: 'http://localhost:8010',
-        changeOrigin: true,
-      },
-      // 图库静态文件代理
-      '/gallery': {
-        target: 'http://localhost:8010',
-        changeOrigin: true,
+  },
+  build: {
+    // 优化构建输出
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+        },
       },
     },
   },

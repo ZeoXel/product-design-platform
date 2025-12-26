@@ -1,12 +1,11 @@
 {
   "name": "ai-design-platform",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "description": "纯前端 AI 配饰设计平台 - 直接调用 API，无需后端服务器",
   "scripts": {
-    "dev": "vite --port 3010",
-    "dev:backend": "cd backend && python main.py",
-    "dev:all": "bun run dev & bun run dev:backend",
+    "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
