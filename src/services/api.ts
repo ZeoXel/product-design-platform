@@ -4,7 +4,7 @@
  */
 
 import * as directApi from './directApi';
-import { isApiConfigured } from '../store/apiSettings';
+import { isApiConfigured } from './directApi';
 import {
   getGalleryItems,
   getGalleryImageUrl as getStaticGalleryImageUrl,

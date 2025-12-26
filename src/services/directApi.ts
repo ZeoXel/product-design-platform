@@ -1,9 +1,14 @@
 /**
  * 前端直接调用 API 服务
- * 绕过后端，从浏览器直接调用 OpenAI 兼容 API
+ * 使用 Vercel 环境变量配置
  */
 
-import { getApiSettings } from '../store/apiSettings';
+// ==================== 环境变量配置 ====================
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.lsaigc.com/v1';
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+const IMAGE_MODEL = import.meta.env.VITE_IMAGE_MODEL || 'doubao-seedream-4-5-251128';
+const CHAT_MODEL = import.meta.env.VITE_CHAT_MODEL || 'claude-3-5-sonnet-20240620';
 
 // ==================== 类型定义 ====================
 
@@ -72,12 +77,18 @@ export interface ChatCompletionResponse {
 // ==================== 核心 API 函数 ====================
 
 /**
+ * 检查 API 是否已配置
+ */
+export function isApiConfigured(): boolean {
+  return Boolean(API_KEY && API_BASE_URL);
+}
+
+/**
  * 获取请求头
  */
 function getHeaders(): HeadersInit {
-  const settings = getApiSettings();
   return {
-    'Authorization': `Bearer ${settings.apiKey}`,
+    'Authorization': `Bearer ${API_KEY}`,
     'Content-Type': 'application/json',
   };
 }
@@ -86,8 +97,7 @@ function getHeaders(): HeadersInit {
  * 获取 API 基础 URL
  */
 function getBaseUrl(): string {
-  const settings = getApiSettings();
-  return settings.apiBaseUrl.replace(/\/$/, '');  // 移除末尾斜杠
+  return API_BASE_URL.replace(/\/$/, '');  // 移除末尾斜杠
 }
 
 /**
@@ -99,11 +109,10 @@ export async function generateImage(params: {
   size?: string;
   n?: number;
 }): Promise<{ imageUrl: string; revisedPrompt?: string }> {
-  const settings = getApiSettings();
   const baseUrl = getBaseUrl();
 
   const requestBody: ImageGenerationRequest = {
-    model: settings.imageModel,
+    model: IMAGE_MODEL,
     prompt: params.prompt,
     n: params.n || 1,
     size: params.size || '2K',
@@ -129,7 +138,7 @@ export async function generateImage(params: {
     console.log('[DirectAPI] 文生图模式');
   }
 
-  console.log(`[DirectAPI] 请求: model=${settings.imageModel}, size=${params.size}`);
+  console.log(`[DirectAPI] 请求: model=${IMAGE_MODEL}, size=${params.size}`);
   console.log(`[DirectAPI] Prompt: ${params.prompt.substring(0, 100)}...`);
 
   const response = await fetch(`${baseUrl}/images/generations`, {
@@ -139,9 +148,8 @@ export async function generateImage(params: {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[DirectAPI] Error: ${response.status} ${response.statusText}`);
-    console.error(`[DirectAPI] Response: ${errorText}`);
+    const errorBody = await response.text();
+    console.error(`[DirectAPI] Error: ${response.status} ${response.statusText}`, errorBody);
     throw new Error(`生成失败: ${response.status} ${response.statusText}`);
   }
 
@@ -167,7 +175,6 @@ export async function chatCompletion(params: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<string> {
-  const settings = getApiSettings();
   const baseUrl = getBaseUrl();
 
   const messages: ChatMessage[] = [];
@@ -187,13 +194,13 @@ export async function chatCompletion(params: {
   })));
 
   const requestBody: ChatCompletionRequest = {
-    model: settings.chatModel,
+    model: CHAT_MODEL,
     messages,
     temperature: params.temperature ?? 0.7,
     max_tokens: params.maxTokens ?? 4096,
   };
 
-  console.log(`[DirectAPI] Chat: model=${settings.chatModel}, messages=${messages.length}`);
+  console.log(`[DirectAPI] Chat: model=${CHAT_MODEL}, messages=${messages.length}`);
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -220,7 +227,6 @@ export async function analyzeImage(params: {
   imageBase64: string;
   prompt?: string;
 }): Promise<string> {
-  const settings = getApiSettings();
   const baseUrl = getBaseUrl();
 
   const imageUrl = params.imageBase64.startsWith('data:')
@@ -244,13 +250,13 @@ export async function analyzeImage(params: {
   ];
 
   const requestBody: ChatCompletionRequest = {
-    model: settings.chatModel,
+    model: CHAT_MODEL,
     messages,
     temperature: 0.3,
     max_tokens: 2048,
   };
 
-  console.log(`[DirectAPI] Analyze: model=${settings.chatModel}`);
+  console.log(`[DirectAPI] Analyze: model=${CHAT_MODEL}`);
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
