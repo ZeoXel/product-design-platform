@@ -187,10 +187,27 @@ export async function generateDesign(params: {
       prompt = `${styleInjection}\n\n${params.instruction}`;
     }
 
-    // 准备参考图
-    const referenceImages = params.reference_image
-      ? [params.reference_image]
-      : undefined;
+    // 准备参考图（必须转换为 base64）
+    let referenceImages: string[] | undefined;
+    if (params.reference_image) {
+      let imageBase64 = params.reference_image;
+
+      // 如果是 URL，需要先转换为 base64
+      if (params.reference_image.startsWith('http') || params.reference_image.startsWith('/')) {
+        try {
+          console.log('[API] 转换参考图 URL 为 base64...');
+          imageBase64 = await urlToBase64(params.reference_image);
+        } catch (e) {
+          console.error('[API] 参考图转换失败:', e);
+          // 转换失败时跳过参考图，改为纯文生图
+        }
+      }
+
+      // 确保是 base64 格式
+      if (imageBase64 && !imageBase64.startsWith('http') && !imageBase64.startsWith('/')) {
+        referenceImages = [imageBase64];
+      }
+    }
 
     // 调用直接 API
     const result = await directApi.generateImage({

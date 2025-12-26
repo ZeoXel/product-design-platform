@@ -120,12 +120,14 @@ export async function generateImage(params: {
     watermark: false,
   };
 
-  // 添加参考图
+  // 添加参考图（必须是 base64 格式，不能是 URL）
   if (params.referenceImages && params.referenceImages.length > 0) {
     requestBody.image = params.referenceImages.map(img => {
-      if (img.startsWith('http')) {
+      if (img.startsWith('data:')) {
         return img;
-      } else if (img.startsWith('data:')) {
+      } else if (img.startsWith('http') || img.startsWith('/')) {
+        // URL 不能直接传给 API，应该在调用前转换为 base64
+        console.warn('[DirectAPI] 警告: 参考图应该是 base64 格式，而不是 URL');
         return img;
       } else {
         // 纯 base64，添加 data URI 前缀
