@@ -26,6 +26,49 @@ interface WorkspaceProps {
   historyItem?: HistoryItem | null;
 }
 
+// 空白画布占位图（用于文生图模式的 v0）
+const BLANK_CANVAS_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect fill='%23f3f4f6' width='100' height='100'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='12' fill='%239ca3af' text-anchor='middle'%3E空白%3C/text%3E%3C/svg%3E";
+
+/**
+ * 生成树状版本号
+ * - v0: 原始图
+ * - 从 v0 分支: v1.0, v2.0, v3.0...
+ * - 从 vX.0 分支: vX.1, vX.2, vX.3...
+ * - 从 vX.Y 分支: vX.(Y+1), vX.(Y+2)...
+ */
+function generateVersionId(
+  parentId: string | null,
+  existingVersions: ImageVersion[]
+): string {
+  // 从 v0 分支，创建新的主版本
+  if (!parentId || parentId === 'v0') {
+    // 找出所有主版本号 (vX.0 格式)
+    const mainVersions = existingVersions
+      .filter(v => v.id.match(/^v(\d+)\.0$/))
+      .map(v => parseInt(v.id.match(/^v(\d+)\.0$/)?.[1] || '0'));
+
+    const maxMain = mainVersions.length > 0 ? Math.max(...mainVersions) : 0;
+    return `v${maxMain + 1}.0`;
+  }
+
+  // 从 vX.Y 分支，创建该主版本下的新次版本
+  const parentMatch = parentId.match(/^v(\d+)\.(\d+)$/);
+  if (parentMatch) {
+    const mainVersion = parseInt(parentMatch[1]);
+
+    // 找出该主版本下所有次版本号
+    const subVersions = existingVersions
+      .filter(v => v.id.match(new RegExp(`^v${mainVersion}\\.(\\d+)$`)))
+      .map(v => parseInt(v.id.match(/\.(\d+)$/)?.[1] || '0'));
+
+    const maxSub = subVersions.length > 0 ? Math.max(...subVersions) : 0;
+    return `v${mainVersion}.${maxSub + 1}`;
+  }
+
+  // 兜底：使用时间戳
+  return `v${Date.now()}`;
+}
+
 export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const [currentPage, setCurrentPage] = useState<'workspace' | 'gallery' | 'history'>('workspace');
 
@@ -143,18 +186,8 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
         v.id === 'v0' ? { ...v, analysis } : v
       ));
 
-      // 生成系统消息，基于实际分析结果
-      const primaryElements = analysis.elements.primary.map(el => el.type).join('、');
-      const styleTags = analysis.style.tags.join('、');
-
-      const systemMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `已分析参考图：检测到${primaryElements}等元素，风格为${styleTags}。${analysis.similarItems && analysis.similarItems.length > 0 ? `找到${analysis.similarItems.length}个相似产品。` : ''}请告诉我你想要的修改，例如：「替换主元素」或「调整配色」。`,
-        timestamp: new Date(),
-        status: 'complete'
-      };
-      setMessages([systemMessage]);
+      // 保持对话框初始状态，分析结果已在左侧面板显示
+      setMessages([]);
     } catch (error) {
       console.error('图像分析失败:', error);
       setGenerationStep('idle');
@@ -199,9 +232,16 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
         content: m.content,
       }));
 
+      // 构建上下文，传递当前分析结果
+      const chatContext = currentAnalysis ? {
+        analysis: currentAnalysis,
+        selected_style: selectedStyle || undefined,
+      } : undefined;
+
       const result = await api.chat({
         messages: chatMessages,
         session_id: sessionId || undefined,
+        context: chatContext,
       });
 
       if (!sessionId && result.session_id) {
@@ -219,13 +259,9 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
         msg.id === thinkingMessage.id ? assistantMessage : msg
       ));
 
-      // 如果当前有选中的版本，更新该版本的对话快照
-      if (currentVersionId && !isBlankMode) {
-        const updatedMessages = [...messages, userMessage, assistantMessage];
-        setVersions(prev => prev.map(v =>
-          v.id === currentVersionId ? { ...v, messagesSnapshot: updatedMessages } : v
-        ));
-      }
+      // 注意：不更新当前版本的 messagesSnapshot
+      // 每个版本的快照在创建时固定，代表到达该版本的对话节点
+      // 当前对话历史（messages）会在生成新版本时保存到新版本的快照中
 
     } catch (error) {
       console.error('对话失败:', error);
@@ -290,14 +326,8 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setImageAnalysis(mockAnalysis);
     setGenerationStep('idle');
 
-    const systemMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: `已选择 ${product.style} 风格的参考图。检测到元素：${product.elements.join('、')}。请告诉我你想要的修改。`,
-      timestamp: new Date(),
-      status: 'complete'
-    };
-    setMessages([systemMessage]);
+    // 保持对话框初始状态，分析结果已在左侧面板显示
+    setMessages([]);
   }, []);
 
   const handleCompatibilityContinue = useCallback(() => {
@@ -427,15 +457,16 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   }, []);
 
   // 选择版本（退出空白模式，恢复该版本的对话历史）
+  // 每个版本是一个对话节点，切换版本 = 回到该节点继续
   const handleSelectVersion = useCallback((versionId: string) => {
     setIsBlankMode(false);
     setCurrentVersionId(versionId);
 
-    // 恢复该版本的对话历史快照
     const targetVersion = versions.find(v => v.id === versionId);
-    if (targetVersion?.messagesSnapshot) {
-      setMessages(targetVersion.messagesSnapshot);
-    }
+
+    // 恢复该版本的对话历史快照（如果没有快照则清空，如 V0 原始图）
+    setMessages(targetVersion?.messagesSnapshot || []);
+
     // 恢复该版本的分析结果
     if (targetVersion?.analysis) {
       setImageAnalysis(targetVersion.analysis);
@@ -472,6 +503,22 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     };
     setMessages(prev => [...prev, userMessage]);
 
+    // 纯文生图场景：如果没有任何版本且没有参考图，先创建空白 v0
+    // v0 保存的是"生图前的对话状态"，这样用户可以回到这个节点重新尝试
+    let workingVersions = versions;
+    if (versions.length === 0 && !referenceBase64) {
+      const blankV0: ImageVersion = {
+        id: 'v0',
+        url: BLANK_CANVAS_PLACEHOLDER,
+        timestamp: new Date(),
+        instruction: '空白画布',
+        messagesSnapshot: [...messages],  // 保存生图前的对话历史
+      };
+      workingVersions = [blankV0];
+      setVersions(workingVersions);
+      console.log('[Generate] 纯文生图模式，创建空白 v0，保存对话历史:', messages.length, '条');
+    }
+
     setIsGenerating(true);
     setProgress(0);
     setShowRating(false);
@@ -488,10 +535,48 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     }, 300);
 
     try {
-      // 直接调用文生图 API（无参考图）
+      // 简化逻辑：左侧显示什么图片，就用什么作为参考图
+      // 空白状态 = 纯文生图
+      let referenceImageToUse: string | undefined = undefined;
+
+      // 计算当前左侧显示的版本（与 ImagePreview 显示一致）
+      const displayedVersion = isBlankMode ? null : versions.find(v => v.id === currentVersionId);
+      const displayedUrl = displayedVersion?.url;
+
+      // 判断是否有有效的图片（排除空白占位符 SVG）
+      const hasValidImage = displayedUrl && !displayedUrl.startsWith('data:image/svg');
+
+      if (hasValidImage) {
+        // 有图片：图生图模式
+        // 外部 URL (http/https) 直接传给后端，避免 CORS 问题
+        // 本地 blob/data URL 需要转换为 base64
+        if (displayedUrl.startsWith('http')) {
+          referenceImageToUse = displayedUrl;  // 直接传 URL
+          console.log(`[Generate] 图生图模式，直接使用 URL: ${displayedUrl.substring(0, 50)}...`);
+        } else if (displayedUrl.startsWith('blob:') || displayedUrl.startsWith('data:')) {
+          try {
+            referenceImageToUse = await urlToBase64(displayedUrl);
+            console.log(`[Generate] 图生图模式，转换本地图片为 base64`);
+          } catch (e) {
+            console.error(`[Generate] 本地图片转换失败:`, e);
+          }
+        } else {
+          // 其他格式尝试转换
+          try {
+            referenceImageToUse = await urlToBase64(displayedUrl);
+            console.log(`[Generate] 图生图模式，使用版本 ${currentVersionId} 的图片`);
+          } catch (e) {
+            console.error(`[Generate] 图片转换失败:`, e, displayedUrl);
+          }
+        }
+      } else {
+        // 无图片：纯文生图模式
+        console.log('[Generate] 纯文生图模式');
+      }
+
       const result = await api.generateDesign({
         instruction: prompt,
-        reference_image: referenceBase64 || undefined,
+        reference_image: referenceImageToUse,
         session_id: sessionId || undefined,
         style_hint: activeStyle || undefined,
       });
@@ -504,8 +589,10 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
           setSessionId(Date.now().toString());
         }
 
-        // 创建新版本（稍后会更新对话快照）
-        const newVersionId = `v${versions.length}`;
+        // 创建新版本（稀后会更新对话快照）
+        // 使用树状版本号：从 v0 分支 → vX.0，从 vX.Y 分支 → vX.(Y+1)
+        const parentId = currentVersionId;
+        const newVersionId = generateVersionId(parentId, workingVersions);
         const newVersion: ImageVersion = {
           id: newVersionId,
           url: result.image_url,
@@ -513,44 +600,23 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
           instruction: prompt,
           analysis: result.analysis,
           messagesSnapshot: [...messages, userMessage],  // 先保存当前对话
+          parentId: parentId || 'v0',  // 记录父版本
         };
 
         setVersions(prev => [...prev, newVersion]);
         setCurrentVersionId(newVersion.id);
         setIsBlankMode(false);  // 退出空白模式
 
-        // 如果生成结果没有附带分析，则主动调用分析 API
-        if (!result.analysis) {
-          setGenerationStep('analyzing');
-          try {
-            // 先尝试获取图片的 base64
-            let imageBase64: string;
-            try {
-              imageBase64 = await urlToBase64(result.image_url);
-            } catch (urlError) {
-              console.error('图片转换失败，尝试直接使用URL:', urlError);
-              // 如果 URL 是相对路径，尝试补全
-              const fullUrl = result.image_url.startsWith('http')
-                ? result.image_url
-                : `${window.location.origin}${result.image_url}`;
-              imageBase64 = await urlToBase64(fullUrl);
-            }
-
-            const analysisResult = await api.analyzeImage({
-              image: imageBase64,
-              include_similar: true,
-            });
-            setImageAnalysis(analysisResult);
-            // 更新版本的分析结果
-            setVersions(prev => prev.map(v =>
-              v.id === newVersion.id ? { ...v, analysis: analysisResult } : v
-            ));
-          } catch (analysisError) {
-            console.error('图像分析失败:', analysisError);
-            // 即使分析失败也继续，不阻塞用户操作
-          }
-        } else {
+        // 处理分析结果（后端已在生成后分析图片）
+        if (result.analysis) {
           setImageAnalysis(result.analysis);
+          // 更新版本的分析结果
+          setVersions(prev => prev.map(v =>
+            v.id === newVersionId ? { ...v, analysis: result.analysis } : v
+          ));
+          console.log('[Generate] 使用后端返回的分析结果');
+        } else {
+          console.log('[Generate] 后端未返回分析结果');
         }
 
         // 添加成功消息（不在对话框显示图片，图片仅在左侧预览区展示）
@@ -591,7 +657,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     } finally {
       setIsGenerating(false);
     }
-  }, [referenceBase64, sessionId, activeStyle, versions]);
+  }, [messages, currentVersionId, isBlankMode, referenceBase64, sessionId, activeStyle, versions]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-mesh">

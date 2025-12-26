@@ -57,10 +57,17 @@ class GenerateRequest(BaseModel):
     style_hint: Optional[StyleHint] = Field(None, description="风格提示，用于引导生成方向")
 
 
+class ChatContext(BaseModel):
+    """对话上下文 - 包含当前分析结果等信息"""
+    analysis: Optional["ImageAnalysis"] = Field(None, description="当前图片分析结果")
+    selected_style: Optional[str] = Field(None, description="用户选择的风格")
+
+
 class ChatRequest(BaseModel):
     """对话请求"""
     messages: List[ChatMessage] = Field(..., description="对话历史")
     session_id: Optional[str] = Field(None, description="会话ID")
+    context: Optional[ChatContext] = Field(None, description="对话上下文")
 
 
 class ImageAnalyzeRequest(BaseModel):

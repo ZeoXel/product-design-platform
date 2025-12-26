@@ -75,27 +75,66 @@ export function ImageAnalysisPanel({
         </div>
       )}
 
-      {/* 风格识别卡片 */}
-      {styleInfo && (
+      {/* 风格识别卡片 - 基于实际分析结果 */}
+      {analysis?.style && (
         <div
-          className="p-3 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100/50 border border-primary-200 cursor-pointer hover:shadow-sm transition-shadow"
+          className="p-3 rounded-xl bg-gradient-to-br from-violet-50 via-primary-50 to-rose-50 border border-violet-200/50 cursor-pointer hover:shadow-md transition-all"
           onClick={() => detectedStyle && onStyleSelect?.(detectedStyle)}
         >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xl">{styleInfo.emoji}</span>
-            <span className="text-sm font-semibold text-primary-700">{styleInfo.name}</span>
+          {/* 顶部：风格匹配 + 氛围 */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {styleInfo ? (
+                <>
+                  <span className="text-xl">{styleInfo.emoji}</span>
+                  <span className="text-sm font-semibold text-gray-700">{styleInfo.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xl">✨</span>
+                  <span className="text-sm font-semibold text-gray-700">风格分析</span>
+                </>
+              )}
+            </div>
+            {analysis.style.mood && (
+              <span className="px-2 py-0.5 bg-white/70 text-violet-600 text-[10px] rounded-full font-medium">
+                {analysis.style.mood}
+              </span>
+            )}
           </div>
-          <p className="text-xs text-primary-600/80">{styleInfo.description}</p>
-          <div className="flex gap-1 mt-2">
-            {styleInfo.colors.slice(0, 3).map((color, i) => (
+
+          {/* 风格标签云 */}
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {analysis.style.tags.slice(0, 5).map((tag, i) => (
               <span
                 key={i}
-                className="px-1.5 py-0.5 bg-white/60 text-primary-600 text-[10px] rounded"
+                className={`px-2 py-0.5 text-[11px] rounded-full font-medium ${
+                  i === 0
+                    ? 'bg-violet-500 text-white'
+                    : i === 1
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-white/80 text-gray-600'
+                }`}
               >
-                {color}
+                {tag}
               </span>
             ))}
           </div>
+
+          {/* 底部：预设风格推荐色 */}
+          {styleInfo && (
+            <div className="flex items-center gap-1 pt-2 border-t border-violet-100">
+              <span className="text-[10px] text-gray-400">推荐配色</span>
+              {styleInfo.colors.slice(0, 4).map((color, i) => (
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 bg-white/60 text-gray-500 text-[10px] rounded"
+                >
+                  {color}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -157,21 +196,6 @@ export function ImageAnalysisPanel({
               ))}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* 风格标签 */}
-      <div>
-        <p className="text-xs text-gray-400 mb-1">风格标签</p>
-        <div className="flex flex-wrap gap-1">
-          {analysis?.style.tags.map((tag, i) => (
-            <span key={i} className="px-2 py-0.5 bg-violet-50 text-violet-600 text-xs rounded-full">
-              {tag}
-            </span>
-          ))}
-        </div>
-        {analysis?.style.mood && (
-          <p className="text-xs text-gray-500 mt-1">氛围：{analysis.style.mood}</p>
         )}
       </div>
 

@@ -242,6 +242,7 @@ async def chat(request: ChatRequest):
         response = await design_agent.chat(
             messages=request.messages,
             session_id=request.session_id,
+            context=request.context,
         )
 
         session_id = request.session_id or "new_session"

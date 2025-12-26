@@ -26,6 +26,7 @@ from models import (
     AspectRatio,
     ImageSize,
     ChatMessage,
+    ChatContext,
 )
 
 settings = get_settings()
@@ -308,13 +309,18 @@ class DesignAgent:
         analysis = None
 
         try:
-            # 步骤1: 如果有参考图，先分析
-            if reference_image:
+            # 步骤1: 如果有参考图，先分析（仅 base64 格式可分析）
+            # URL 格式的参考图直接用于生成，跳过分析
+            is_url = reference_image and reference_image.startswith("http")
+            if reference_image and not is_url:
                 analysis = await self.analyze_reference(
                     reference_image,
                     session["id"],
                     include_similar=include_similar
                 )
+                print(f"[Design Agent] 分析参考图完成")
+            elif is_url:
+                print(f"[Design Agent] 参考图为 URL，跳过分析步骤")
             elif session.get("analysis"):
                 analysis = session["analysis"]
 
@@ -326,11 +332,18 @@ class DesignAgent:
             print(f"[Design Agent] Natural language prompt: {design_prompt}")
 
             # 步骤3: 调用图像生成服务
+            # 注意：只使用明确传入的参考图，不自动使用 session 中的图片
+            # 这样可以正确区分「图生图」和「纯文生图」场景
             reference_images = None
             if reference_image:
                 reference_images = [reference_image]
-            elif session.get("current_image"):
-                reference_images = [session["current_image"]]
+                # 打印参考图信息（不打印完整内容）
+                if is_url:
+                    print(f"[Design Agent] 图生图模式，使用 URL: {reference_image[:80]}...")
+                else:
+                    print(f"[Design Agent] 图生图模式，使用 base64 ({len(reference_image)} chars)")
+            else:
+                print(f"[Design Agent] 纯文生图模式，不使用参考图")
 
             size_map = {
                 ImageSize.SIZE_1K: "1K",
@@ -350,13 +363,37 @@ class DesignAgent:
                 "image_url": generation_result.image_url,
             })
 
-            # 步骤5: 估算成本
-            cost_estimate = self._estimate_cost(analysis)
+            # 步骤5: 分析生成的图片（后端分析避免前端 CORS 问题）
+            generated_analysis = None
+            if generation_result.image_url:
+                try:
+                    import httpx
+                    import base64
+                    print(f"[Design Agent] 正在分析生成的图片...")
+
+                    # 从 URL 获取图片
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        img_response = await client.get(generation_result.image_url)
+                        img_response.raise_for_status()
+                        img_base64 = base64.b64encode(img_response.content).decode("utf-8")
+
+                    # 分析图片
+                    generated_analysis = await self.claude.analyze_image(
+                        image_base64=img_base64,
+                        prompt=ANALYSIS_PROMPT,
+                    )
+                    print(f"[Design Agent] 生成图片分析完成")
+                except Exception as e:
+                    print(f"[Design Agent] 生成图片分析失败: {e}")
+                    # 分析失败不影响返回结果
+
+            # 步骤6: 估算成本
+            cost_estimate = self._estimate_cost(generated_analysis or analysis)
 
             return DesignResponse(
                 success=True,
                 image_url=generation_result.image_url,
-                analysis=analysis,
+                analysis=generated_analysis,  # 返回生成图片的分析
                 prompt_used=design_prompt,
                 message="设计生成成功",
                 cost_estimate=cost_estimate,
@@ -376,6 +413,7 @@ class DesignAgent:
         self,
         messages: list[ChatMessage],
         session_id: Optional[str] = None,
+        context: Optional[ChatContext] = None,
     ) -> str:
         """
         与设计助手对话
@@ -383,9 +421,10 @@ class DesignAgent:
         Args:
             messages: 对话历史
             session_id: 会话ID
+            context: 对话上下文（包含分析结果等）
 
         Returns:
-            AI回复
+            AI回复（支持结构化设计方案）
         """
         session = self._get_session(session_id)
 
@@ -401,22 +440,61 @@ class DesignAgent:
 - 参考成功案例给出具体建议
 - 预估可行性和效果
 
+## 设计方案输出格式
+
+当你提供具体的设计方案时，请使用以下结构化格式：
+
+```design
+{
+  "title": "方案标题",
+  "elements": {
+    "primary": ["主元素1", "主元素2"],
+    "secondary": ["辅助元素1", "辅助元素2"],
+    "hardware": ["五金件1"]
+  },
+  "style": ["风格标签1", "风格标签2"],
+  "colors": ["颜色1", "颜色2"],
+  "prompt": "完整的英文生成提示词..."
+}
+```
+
+这个格式会在前端以标签形式呈现，方便用户查看和操作。prompt 旁边会有生成按钮。
+
 请用专业但友好的语气回复。"""
 
         # 添加上下文
         context_messages = []
 
-        # 如果有当前设计分析，添加到上下文
-        if session.get("analysis"):
-            analysis = session['analysis']
-            # 生成分析描述
+        # 优先使用传入的 context，其次使用 session 中的分析结果
+        analysis = None
+        if context and context.analysis:
+            analysis = context.analysis
+        elif session.get("analysis"):
+            analysis = session.get("analysis")
+
+        # 如果有分析结果，添加到上下文
+        if analysis:
+            # 生成详细的分析描述
             primary_elements = ', '.join([e.type for e in analysis.elements.primary])
-            style_tags = ', '.join(analysis.style.tags)
-            description = f"主要元素: {primary_elements}; 风格: {style_tags} ({analysis.style.mood})"
+            secondary_elements = ', '.join([f"{e.type}×{e.count}" if e.count else e.type for e in analysis.elements.secondary])
+            hardware = ', '.join([e.type for e in analysis.elements.hardware])
+            style_tags = ', '.join(analysis.style.tags) if analysis.style.tags else ""
+            mood = analysis.style.mood if analysis.style else ""
+
+            context_desc = f"""[当前设计上下文]
+- 主体元素: {primary_elements or '无'}
+- 辅助元素: {secondary_elements or '无'}
+- 五金配件: {hardware or '无'}
+- 风格标签: {style_tags or '未识别'}
+- 整体氛围: {mood or '未知'}
+- 尺寸: 约{analysis.physicalSpecs.lengthCm}cm / {analysis.physicalSpecs.weightG}g"""
+
+            if context and context.selected_style:
+                context_desc += f"\n- 用户选择风格: {context.selected_style}"
 
             context_messages.append(ChatMessage(
                 role="assistant",
-                content=f"[当前设计分析]\n{description}",
+                content=context_desc,
             ))
 
         # 添加用户消息

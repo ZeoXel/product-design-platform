@@ -20,6 +20,49 @@ const ratings = [
   { value: 5, emoji: '😊' },
 ];
 
+/**
+ * 版本号排序函数
+ * v0 < v1.0 < v1.1 < v1.2 < v2.0 < v2.1 ...
+ */
+function sortVersions(versions: ImageVersion[]): ImageVersion[] {
+  return [...versions].sort((a, b) => {
+    // v0 特殊处理
+    if (a.id === 'v0') return -1;
+    if (b.id === 'v0') return 1;
+
+    // 解析版本号 vX.Y
+    const matchA = a.id.match(/^v(\d+)\.(\d+)$/);
+    const matchB = b.id.match(/^v(\d+)\.(\d+)$/);
+
+    if (!matchA && !matchB) return 0;
+    if (!matchA) return 1;
+    if (!matchB) return -1;
+
+    const [, mainA, subA] = matchA;
+    const [, mainB, subB] = matchB;
+
+    // 先比较主版本号
+    const mainDiff = parseInt(mainA) - parseInt(mainB);
+    if (mainDiff !== 0) return mainDiff;
+
+    // 再比较次版本号
+    return parseInt(subA) - parseInt(subB);
+  });
+}
+
+/**
+ * 格式化版本号显示
+ */
+function formatVersionLabel(version: ImageVersion): string {
+  if (version.id === 'v0') {
+    // 区分空白画布和原图
+    return version.instruction === '空白画布' ? '空白' : '原图';
+  }
+  // vX.Y -> X.Y
+  const match = version.id.match(/^v(\d+\.\d+)$/);
+  return match ? match[1] : version.id;
+}
+
 interface VersionBarProps {
   // 多画布支持
   canvases?: DesignCanvas[];
@@ -122,7 +165,7 @@ export function VersionBar({
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-xs text-gray-400 shrink-0">版本</span>
             <div className="flex gap-1 overflow-x-auto no-scrollbar">
-              {versions.map((version, index) => (
+              {sortVersions(versions).map((version) => (
                 <div key={version.id} className="relative shrink-0 group/version">
                   <button
                     onClick={() => onSelect(version.id)}
@@ -134,18 +177,19 @@ export function VersionBar({
                         : 'border-transparent hover:border-gray-300'
                       }
                     `}
+                    title={version.id}
                   >
                     <img
                       src={version.url}
-                      alt={`v${index + 1}`}
+                      alt={version.id}
                       className="w-full h-full object-cover"
                     />
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center">
-                      {index + 1}
+                      {formatVersionLabel(version)}
                     </span>
                   </button>
-                  {/* 删除按钮 - hover 时显示 */}
-                  {onDelete && (
+                  {/* 删除按钮 - hover 时显示（v0 不可删除） */}
+                  {onDelete && version.id !== 'v0' && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

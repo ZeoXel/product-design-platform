@@ -109,6 +109,11 @@ export interface GalleryReference {
   salesTier: 'A' | 'B' | 'C';
 }
 
+export interface ChatContext {
+  analysis?: ImageAnalysis;
+  selected_style?: string;
+}
+
 export interface ChatResponse {
   message: string;
   session_id: string;
@@ -230,12 +235,14 @@ export async function generateImage(params: {
 export async function chat(params: {
   messages: ChatMessage[];
   session_id?: string;
+  context?: ChatContext;
 }): Promise<ChatResponse> {
   return request('/chat', {
     method: 'POST',
     body: JSON.stringify({
       messages: params.messages,
       session_id: params.session_id,
+      context: params.context,
     }),
   });
 }
