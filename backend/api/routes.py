@@ -21,7 +21,7 @@ from models import (
     DesignPreset,
 )
 from agents import design_agent
-from services import claude_service, seedream_service, gallery_service, embedding_service, preset_service
+from services import claude_service, seedream_service, gallery_service, preset_service
 
 router = APIRouter(prefix="/api/v1", tags=["Design API"])
 
@@ -132,55 +132,20 @@ async def get_preset(product_type: str, style: str):
 @router.post("/analyze", response_model=ImageAnalysis)
 async def analyze_image(
     request: ImageAnalyzeRequest,
-    include_similar: bool = True  # 是否包含相似产品推荐
+    include_similar: bool = False  # 是否包含相似产品推荐（默认关闭）
 ):
     """
-    分析图像
+    分析图像（统一使用 design_agent 的分析系统）
 
     使用Claude Vision分析图像中的设计元素、风格等
     可选：自动查找图库中的相似产品
     """
     try:
-        # 1. 分析图像
-        result = await claude_service.analyze_image(
+        # 统一调用 design_agent 的分析方法
+        result = await design_agent.analyze_reference(
             image_base64=request.image,
-            prompt=request.prompt,
+            include_similar=include_similar,
         )
-
-        # 2. 如果需要，查找相似图片
-        if include_similar:
-            try:
-                # 使用标准化的英文描述生成查询向量
-                from services.search_utils import generate_multimodal_search_description
-                text_desc = generate_multimodal_search_description(result)
-                print(f"[Analyze] Query description: {text_desc[:100]}...")
-
-                query_embedding = await embedding_service.generate_embedding(
-                    image_base64=request.image,
-                    text=text_desc
-                )
-
-                if query_embedding is None:
-                    print("[Analyze] Cannot generate embedding, skipping similarity search")
-                    return result
-
-                # 使用较低阈值（文本嵌入相似度通常偏低）
-                similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.15)
-
-                # 添加相似产品到结果
-                from models import SimilarItem
-                result.similarItems = [
-                    SimilarItem(
-                        id=item["id"],
-                        imageUrl=item["imageUrl"],
-                        similarity=item["similarity"]
-                    )
-                    for item in similar
-                ]
-            except Exception as e:
-                # 相似推荐失败不影响主流程
-                print(f"[Analyze] Failed to find similar items: {e}")
-
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -189,18 +154,19 @@ async def analyze_image(
 @router.post("/analyze/upload", response_model=ImageAnalysis)
 async def analyze_image_upload(
     image: UploadFile = File(...),
-    prompt: Optional[str] = "分析这个挂饰设计的元素、风格和结构",
+    include_similar: bool = False,
 ):
     """
-    上传文件分析图像
+    上传文件分析图像（统一使用 design_agent 的分析系统）
     """
     try:
         content = await image.read()
         image_base64 = base64.b64encode(content).decode("utf-8")
 
-        result = await claude_service.analyze_image(
+        # 统一调用 design_agent 的分析方法
+        result = await design_agent.analyze_reference(
             image_base64=image_base64,
-            prompt=prompt,
+            include_similar=include_similar,
         )
         return result
     except Exception as e:

@@ -8,6 +8,8 @@ import { ImageAnalysisPanel } from '../components/preview/ImageAnalysisPanel';
 import { CompatibilityWarning } from '../components/chat/CompatibilityWarning';
 import { CostPanelEnhanced } from '../components/cost/CostPanelEnhanced';
 import { GalleryDrawer } from '../components/gallery/GalleryDrawer';
+import { CanvasDrawer } from '../components/canvas/CanvasDrawer';
+import { canvasService } from '../services/canvasService';
 import { type HistoryItem } from '../services/historyService';
 import { detectStyleFromTags, getStyleInfo, type StyleKey } from '../components/style/StyleSelector';
 import type {
@@ -104,7 +106,6 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const [userRating, setUserRating] = useState<number | undefined>();
   const [showRating, setShowRating] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<StyleKey | null>(null);
-  const [isBlankMode, setIsBlankMode] = useState(false);  // 空白模式，用于文生图
   const [isChatting, setIsChatting] = useState(false);  // Agent 对话中（区别于图片生成）
 
   // 当前版本的分析结果（优先使用版本自带的分析，否则使用全局分析）
@@ -127,6 +128,68 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       .then(() => setApiConnected(true))
       .catch(() => setApiConnected(false));
   }, []);
+
+  // 初始化：从 localStorage 加载画布列表
+  useEffect(() => {
+    const savedCanvases = canvasService.getCanvases();
+    const savedCurrentId = canvasService.getCurrentCanvasId();
+
+    if (savedCanvases.length > 0) {
+      setCanvases(savedCanvases);
+
+      // 恢复当前画布状态
+      const currentCanvas = savedCurrentId
+        ? savedCanvases.find(c => c.id === savedCurrentId)
+        : savedCanvases[0];
+
+      if (currentCanvas) {
+        setCurrentCanvasId(currentCanvas.id);
+        setVersions(currentCanvas.versions);
+        setCurrentVersionId(currentCanvas.currentVersionId);
+        setReferenceImage(currentCanvas.referenceImage);
+        setReferenceBase64(currentCanvas.referenceBase64);
+        setMessages(currentCanvas.messages);
+        setImageAnalysis(currentCanvas.analysis);
+        console.log('[Workspace] 恢复画布:', currentCanvas.id, currentCanvas.name);
+      }
+    }
+  }, []);
+
+  // 自动保存：当画布状态变化时持久化到 localStorage
+  useEffect(() => {
+    // 跳过初始空状态
+    if (!currentCanvasId && versions.length === 0 && !referenceImage) {
+      return;
+    }
+
+    // 如果当前有内容但没有画布 ID，创建一个
+    if (!currentCanvasId && (versions.length > 0 || referenceImage)) {
+      const newCanvas = canvasService.createCanvas();
+      setCurrentCanvasId(newCanvas.id);
+      setCanvases(canvasService.getCanvases());
+      return;
+    }
+
+    // 保存当前画布状态
+    if (currentCanvasId) {
+      const currentCanvas = canvases.find(c => c.id === currentCanvasId);
+      if (currentCanvas) {
+        const updatedCanvas: DesignCanvas = {
+          ...currentCanvas,
+          versions,
+          currentVersionId,
+          referenceImage,
+          referenceBase64,
+          messages,
+          analysis: imageAnalysis,
+          updatedAt: new Date(),
+        };
+        canvasService.saveCanvas(updatedCanvas);
+        // 更新本地状态
+        setCanvases(prev => prev.map(c => c.id === currentCanvasId ? updatedCanvas : c));
+      }
+    }
+  }, [versions, currentVersionId, referenceImage, messages, imageAnalysis]);
 
   // 从历史记录恢复
   useEffect(() => {
@@ -175,7 +238,6 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     try {
       const analysis = await api.analyzeImage({
         image: base64,
-        include_similar: true,
       });
 
       setImageAnalysis(analysis);
@@ -277,10 +339,10 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     } finally {
       setIsChatting(false);
     }
-  }, [messages, sessionId, currentVersionId, isBlankMode]);
+  }, [messages, sessionId, currentVersionId]);
 
-  // 空白模式时不显示任何版本
-  const currentVersion = isBlankMode ? null : (versions.find(v => v.id === currentVersionId) || null);
+  // 当前显示的版本
+  const currentVersion = versions.find(v => v.id === currentVersionId) || null;
 
   const handleGallerySelect = useCallback(async (product: ReferenceProduct) => {
     setReferenceImage(product.imageUrl);
@@ -344,60 +406,11 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setCompatibilityCheck(null);
   }, []);
 
-  // 保存当前画布状态到 canvases 数组
-  const saveCurrentCanvas = useCallback(() => {
-    if (currentCanvasId && (versions.length > 0 || referenceImage)) {
-      setCanvases(prev => prev.map(c =>
-        c.id === currentCanvasId
-          ? {
-              ...c,
-              versions,
-              currentVersionId,
-              referenceImage,
-              referenceBase64,
-              messages,
-              analysis: imageAnalysis,
-            }
-          : c
-      ));
-    }
-  }, [currentCanvasId, versions, currentVersionId, referenceImage, referenceBase64, messages, imageAnalysis]);
-
   // 创建新画布
   const handleCreateCanvas = useCallback(() => {
-    // 先保存当前画布状态
-    if (currentCanvasId) {
-      saveCurrentCanvas();
-    } else if (versions.length > 0 || referenceImage) {
-      // 如果当前没有画布ID但有内容，先创建一个画布保存当前内容
-      const firstCanvas: DesignCanvas = {
-        id: `canvas-${Date.now() - 1}`,
-        name: '画布 1',
-        createdAt: new Date(),
-        versions,
-        currentVersionId,
-        referenceImage,
-        referenceBase64,
-        messages,
-        analysis: imageAnalysis,
-      };
-      setCanvases(prev => [...prev, firstCanvas]);
-    }
-
-    // 创建新的空白画布
-    const newCanvas: DesignCanvas = {
-      id: `canvas-${Date.now()}`,
-      name: `画布 ${canvases.length + (versions.length > 0 || referenceImage ? 2 : 1)}`,
-      createdAt: new Date(),
-      versions: [],
-      currentVersionId: null,
-      referenceImage: null,
-      referenceBase64: null,
-      messages: [],
-      analysis: null,
-    };
-
-    setCanvases(prev => [...prev, newCanvas]);
+    // 使用 canvasService 创建新画布
+    const newCanvas = canvasService.createCanvas();
+    setCanvases(canvasService.getCanvases());
     setCurrentCanvasId(newCanvas.id);
 
     // 清空当前工作状态
@@ -414,52 +427,64 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setUserRating(undefined);
     setShowRating(false);
     setSelectedStyle(null);
-  }, [currentCanvasId, canvases.length, versions, currentVersionId, referenceImage, referenceBase64, messages, imageAnalysis, saveCurrentCanvas]);
+    console.log('[Workspace] 创建新画布:', newCanvas.id);
+  }, []);
 
   // 切换画布
-  const handleSelectCanvas = useCallback((canvasId: string) => {
-    if (canvasId === currentCanvasId) return;
+  const handleSelectCanvas = useCallback((canvas: DesignCanvas) => {
+    if (canvas.id === currentCanvasId) return;
 
-    // 保存当前画布状态
-    saveCurrentCanvas();
+    // 设置当前画布 ID
+    canvasService.setCurrentCanvasId(canvas.id);
+    setCurrentCanvasId(canvas.id);
 
     // 加载目标画布状态
-    const targetCanvas = canvases.find(c => c.id === canvasId);
-    if (targetCanvas) {
-      setCurrentCanvasId(canvasId);
-      setVersions(targetCanvas.versions);
-      setCurrentVersionId(targetCanvas.currentVersionId);
-      setReferenceImage(targetCanvas.referenceImage);
-      setReferenceBase64(targetCanvas.referenceBase64);
-      setMessages(targetCanvas.messages);
-      setImageAnalysis(targetCanvas.analysis);
-      // 重置其他状态
-      setCompatibilityCheck(null);
-      setCostBreakdown(null);
-      setGenerationStep('idle');
-      setGenerationError(undefined);
-      setUserRating(undefined);
-      setShowRating(false);
-    }
-  }, [currentCanvasId, canvases, saveCurrentCanvas]);
+    setVersions(canvas.versions);
+    setCurrentVersionId(canvas.currentVersionId);
+    setReferenceImage(canvas.referenceImage);
+    setReferenceBase64(canvas.referenceBase64);
+    setMessages(canvas.messages);
+    setImageAnalysis(canvas.analysis);
 
-  // 创建空白版本（进入文生图模式，但保留版本历史）
-  const handleCreateBlankVersion = useCallback(() => {
-    setIsBlankMode(true);
+    // 重置其他状态
+    setCompatibilityCheck(null);
+    setCostBreakdown(null);
+    setGenerationStep('idle');
+    setGenerationError(undefined);
+    setUserRating(undefined);
+    setShowRating(false);
+    console.log('[Workspace] 切换到画布:', canvas.id, canvas.name);
+  }, [currentCanvasId]);
+
+  // 删除画布
+  const handleDeleteCanvas = useCallback((canvasId: string) => {
+    // 不允许删除当前画布
+    if (canvasId === currentCanvasId) return;
+
+    canvasService.deleteCanvas(canvasId);
+    setCanvases(canvasService.getCanvases());
+    console.log('[Workspace] 删除画布:', canvasId);
+  }, [currentCanvasId]);
+
+  // 清除画布内容，回到初始状态
+  const handleClearCanvas = useCallback(() => {
+    setVersions([]);
     setCurrentVersionId(null);
+    setReferenceImage(null);
+    setReferenceBase64(null);
     setImageAnalysis(null);
+    setMessages([]);
     setCompatibilityCheck(null);
     setCostBreakdown(null);
     setGenerationStep('idle');
     setGenerationError(undefined);
     setShowRating(false);
-    // 注意：不清空 versions，保留版本历史
+    console.log('[Workspace] 清除画布内容');
   }, []);
 
-  // 选择版本（退出空白模式，恢复该版本的对话历史）
+  // 选择版本，恢复该版本的对话历史
   // 每个版本是一个对话节点，切换版本 = 回到该节点继续
   const handleSelectVersion = useCallback((versionId: string) => {
-    setIsBlankMode(false);
     setCurrentVersionId(versionId);
 
     const targetVersion = versions.find(v => v.id === versionId);
@@ -477,14 +502,12 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
   const handleDeleteVersion = useCallback((versionId: string) => {
     setVersions(prev => {
       const newVersions = prev.filter(v => v.id !== versionId);
-      // 如果删除的是当前版本，切换到最后一个版本或进入空白模式
+      // 如果删除的是当前版本，切换到最后一个版本
       if (currentVersionId === versionId) {
         if (newVersions.length > 0) {
           setCurrentVersionId(newVersions[newVersions.length - 1].id);
-          setIsBlankMode(false);
         } else {
           setCurrentVersionId(null);
-          setIsBlankMode(true);
         }
       }
       return newVersions;
@@ -540,7 +563,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       let referenceImageToUse: string | undefined = undefined;
 
       // 计算当前左侧显示的版本（与 ImagePreview 显示一致）
-      const displayedVersion = isBlankMode ? null : versions.find(v => v.id === currentVersionId);
+      const displayedVersion = versions.find(v => v.id === currentVersionId);
       const displayedUrl = displayedVersion?.url;
 
       // 判断是否有有效的图片（排除空白占位符 SVG）
@@ -605,7 +628,6 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
 
         setVersions(prev => [...prev, newVersion]);
         setCurrentVersionId(newVersion.id);
-        setIsBlankMode(false);  // 退出空白模式
 
         // 处理分析结果（后端已在生成后分析图片）
         if (result.analysis) {
@@ -657,7 +679,7 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     } finally {
       setIsGenerating(false);
     }
-  }, [messages, currentVersionId, isBlankMode, referenceBase64, sessionId, activeStyle, versions]);
+  }, [messages, currentVersionId, referenceBase64, sessionId, activeStyle, versions]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-mesh">
@@ -677,23 +699,18 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
                 onUpload={handleUpload}
                 onGalleryOpen={() => setIsGalleryOpen(true)}
                 onExport={() => {}}
+                onClear={handleClearCanvas}
               />
 
               {/* 底部悬浮栏 */}
-              {(versions.length > 0 || canvases.length > 0 || generationStep !== 'idle') && (
+              {(versions.length > 0 || generationStep !== 'idle') && (
                 <div className="absolute bottom-4 left-4 right-4">
                   <div className="glass-subtle rounded-xl px-4 h-12 flex items-center">
                     <VersionBar
-                      canvases={canvases}
-                      currentCanvasId={currentCanvasId || undefined}
-                      onSelectCanvas={handleSelectCanvas}
-                      onCreateCanvas={handleCreateCanvas}
                       versions={versions}
                       currentId={currentVersionId}
                       onSelect={handleSelectVersion}
                       onDelete={handleDeleteVersion}
-                      onCreateBlankVersion={handleCreateBlankVersion}
-                      isBlankMode={isBlankMode}
                       generationStep={generationStep}
                       error={generationError}
                       showRating={showRating}
@@ -796,11 +813,20 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
         <span>API ¥{(Math.max(0, versions.length - 1) * 0.15).toFixed(2)}</span>
       </footer>
 
-      {/* 图库抽屉 */}
+      {/* 图库抽屉 - 右侧 */}
       <GalleryDrawer
         isOpen={isGalleryOpen}
         onClose={() => setIsGalleryOpen(false)}
         onSelect={handleGallerySelect}
+      />
+
+      {/* 画布抽屉 - 左侧悬浮 */}
+      <CanvasDrawer
+        canvases={canvases}
+        currentCanvasId={currentCanvasId}
+        onSelectCanvas={handleSelectCanvas}
+        onCreateCanvas={handleCreateCanvas}
+        onDeleteCanvas={handleDeleteCanvas}
       />
     </div>
   );

@@ -199,7 +199,7 @@ export async function analyzeImage(params: {
   prompt?: string;
   include_similar?: boolean;
 }): Promise<ImageAnalysis> {
-  const url = `/analyze${params.include_similar !== false ? '?include_similar=true' : ''}`;
+  const url = `/analyze${params.include_similar === true ? '?include_similar=true' : ''}`;
   return request(url, {
     method: 'POST',
     body: JSON.stringify({

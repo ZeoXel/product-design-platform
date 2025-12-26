@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ImageVersion, GenerationStep, DesignCanvas } from '../../types';
+import type { ImageVersion, GenerationStep } from '../../types';
 
 const stepLabels: Record<GenerationStep, string> = {
   idle: '',
@@ -55,8 +55,7 @@ function sortVersions(versions: ImageVersion[]): ImageVersion[] {
  */
 function formatVersionLabel(version: ImageVersion): string {
   if (version.id === 'v0') {
-    // 区分空白画布和原图
-    return version.instruction === '空白画布' ? '空白' : '原图';
+    return '原图';
   }
   // vX.Y -> X.Y
   const match = version.id.match(/^v(\d+\.\d+)$/);
@@ -64,18 +63,11 @@ function formatVersionLabel(version: ImageVersion): string {
 }
 
 interface VersionBarProps {
-  // 多画布支持
-  canvases?: DesignCanvas[];
-  currentCanvasId?: string;
-  onSelectCanvas?: (id: string) => void;
-  onCreateCanvas?: () => void;
   // 当前画布的版本管理
   versions: ImageVersion[];
   currentId: string | null;
   onSelect: (id: string) => void;
-  onDelete?: (id: string) => void;  // 删除版本
-  onCreateBlankVersion?: () => void;  // 在版本层级创建空白版本
-  isBlankMode?: boolean;  // 当前是否处于空白模式（准备文生图）
+  onDelete?: (id: string) => void;
   // 生成状态
   generationStep?: GenerationStep;
   error?: string;
@@ -85,16 +77,10 @@ interface VersionBarProps {
 }
 
 export function VersionBar({
-  canvases,
-  currentCanvasId,
-  onSelectCanvas,
-  onCreateCanvas,
   versions,
   currentId,
   onSelect,
   onDelete,
-  onCreateBlankVersion,
-  isBlankMode = false,
   generationStep = 'idle',
   error,
   showRating = false,
@@ -103,65 +89,17 @@ export function VersionBar({
 }: VersionBarProps) {
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
 
-  // 如果没有画布也没有版本，且不在生成中，不显示
-  const hasCanvases = canvases && canvases.length > 0;
   const hasVersions = versions.length > 0;
 
-  if (!hasCanvases && !hasVersions && generationStep === 'idle') {
+  if (!hasVersions && generationStep === 'idle') {
     return null;
   }
 
   return (
     <div className="flex items-center justify-between gap-4">
-      {/* 左侧：画布 + 版本选择 */}
+      {/* 左侧：版本选择 */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* 画布选择器（如果有多画布） */}
-        {hasCanvases && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs text-gray-400">画布</span>
-            <div className="flex gap-1">
-              {canvases.map((canvas, index) => {
-                const hasContent = canvas.versions.length > 0;
-                const isActive = canvas.id === currentCanvasId;
-                return (
-                  <button
-                    key={canvas.id}
-                    onClick={() => onSelectCanvas?.(canvas.id)}
-                    className={`
-                      w-6 h-6 rounded-md text-xs font-medium transition-all
-                      ${isActive
-                        ? 'bg-primary-500 text-white'
-                        : hasContent
-                          ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                      }
-                    `}
-                    title={canvas.name || `画布 ${index + 1}`}
-                  >
-                    {index + 1}
-                  </button>
-                );
-              })}
-              {/* 新建画布按钮 */}
-              {onCreateCanvas && (
-                <button
-                  onClick={onCreateCanvas}
-                  className="w-6 h-6 rounded-md border border-dashed border-gray-300 hover:border-primary-400 hover:bg-primary-50 flex items-center justify-center transition-colors"
-                  title="新建画布"
-                >
-                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            {/* 分隔线 */}
-            {hasVersions && <div className="w-px h-5 bg-gray-200" />}
-          </div>
-        )}
-
-        {/* 版本选择 */}
-        {(hasVersions || onCreateBlankVersion) && (
+        {hasVersions && (
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-xs text-gray-400 shrink-0">版本</span>
             <div className="flex gap-1 overflow-x-auto no-scrollbar">
@@ -172,7 +110,7 @@ export function VersionBar({
                     className={`
                       relative w-9 h-9 rounded-lg overflow-hidden
                       border-2 transition-all duration-150
-                      ${currentId === version.id && !isBlankMode
+                      ${currentId === version.id
                         ? 'border-primary-500'
                         : 'border-transparent hover:border-gray-300'
                       }
@@ -205,26 +143,6 @@ export function VersionBar({
                   )}
                 </div>
               ))}
-
-              {/* 新建空白版本按钮（用于文生图） */}
-              {onCreateBlankVersion && (
-                <button
-                  onClick={onCreateBlankVersion}
-                  className={`
-                    w-9 h-9 rounded-lg border-2 border-dashed shrink-0
-                    flex items-center justify-center transition-colors
-                    ${isBlankMode
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-gray-300 hover:border-primary-400 hover:bg-primary-50'
-                    }
-                  `}
-                  title="新建空白版本（文生图）"
-                >
-                  <svg className={`w-4 h-4 ${isBlankMode ? 'text-primary-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              )}
             </div>
           </div>
         )}

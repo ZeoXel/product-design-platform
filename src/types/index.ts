@@ -220,12 +220,17 @@ export interface DesignCanvas {
   id: string;
   name: string;
   createdAt: Date;
+  updatedAt: Date;
   versions: ImageVersion[];
   currentVersionId: string | null;
   referenceImage: string | null;
   referenceBase64: string | null;
   messages: ChatMessage[];
   analysis: ImageAnalysis | null;
+  // 元信息
+  thumbnail?: string;  // 缩略图 URL（最新版本的图片）
+  description?: string;  // 画布描述
+  tags?: string[];  // 标签
 }
 
 // ==================== 探索模式类型 ====================
