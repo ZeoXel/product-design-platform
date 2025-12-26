@@ -559,43 +559,54 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     }, 300);
 
     try {
-      // 简化逻辑：左侧显示什么图片，就用什么作为参考图
-      // 空白状态 = 纯文生图
+      // 后端迁移：左侧预览区有图片就用作参考图（图生图），没有图片就纯文生图
+      // 使用 workingVersions 而不是 versions，确保拿到最新状态
       let referenceImageToUse: string | undefined = undefined;
 
-      // 计算当前左侧显示的版本（与 ImagePreview 显示一致）
-      const displayedVersion = versions.find(v => v.id === currentVersionId);
+      // 获取当前显示的版本（与 ImagePreview 保持一致）
+      const displayedVersion = workingVersions.find(v => v.id === currentVersionId);
       const displayedUrl = displayedVersion?.url;
 
-      // 判断是否有有效的图片（排除空白占位符 SVG）
-      const hasValidImage = displayedUrl && !displayedUrl.startsWith('data:image/svg');
+      // 检查是否有有效的图片
+      // - 排除空白占位符 SVG
+      // - 排除空字符串
+      // - 排除 undefined/null
+      const isValidImageUrl = (url: string | undefined): url is string => {
+        if (!url) return false;
+        if (url.startsWith('data:image/svg')) return false;  // SVG 占位符
+        if (url.length < 10) return false;  // 太短的 URL 无效
+        return true;
+      };
 
-      if (hasValidImage) {
+      if (isValidImageUrl(displayedUrl)) {
         // 有图片：图生图模式
-        // 外部 URL (http/https) 直接传给后端，避免 CORS 问题
-        // 本地 blob/data URL 需要转换为 base64
+        console.log(`[Generate] 图生图模式，当前版本: ${currentVersionId}, URL 类型: ${displayedUrl.substring(0, 20)}...`);
+
         if (displayedUrl.startsWith('http')) {
-          referenceImageToUse = displayedUrl;  // 直接传 URL
-          console.log(`[Generate] 图生图模式，直接使用 URL: ${displayedUrl.substring(0, 50)}...`);
-        } else if (displayedUrl.startsWith('blob:') || displayedUrl.startsWith('data:')) {
+          // 外部 URL：直接传给 API（api.ts 会处理转换）
+          referenceImageToUse = displayedUrl;
+          console.log(`[Generate] 使用外部 URL`);
+        } else if (displayedUrl.startsWith('blob:') || displayedUrl.startsWith('data:image')) {
+          // 本地文件或 data URL：转换为 base64
           try {
             referenceImageToUse = await urlToBase64(displayedUrl);
-            console.log(`[Generate] 图生图模式，转换本地图片为 base64`);
+            console.log(`[Generate] 转换本地图片为 base64 成功`);
           } catch (e) {
             console.error(`[Generate] 本地图片转换失败:`, e);
+            // 转换失败，降级为纯文生图
           }
-        } else {
-          // 其他格式尝试转换
+        } else if (displayedUrl.startsWith('/')) {
+          // 相对路径（如 /gallery/xxx.jpg）：转换为 base64
           try {
             referenceImageToUse = await urlToBase64(displayedUrl);
-            console.log(`[Generate] 图生图模式，使用版本 ${currentVersionId} 的图片`);
+            console.log(`[Generate] 转换相对路径图片为 base64 成功`);
           } catch (e) {
-            console.error(`[Generate] 图片转换失败:`, e, displayedUrl);
+            console.error(`[Generate] 相对路径图片转换失败:`, e);
           }
         }
       } else {
         // 无图片：纯文生图模式
-        console.log('[Generate] 纯文生图模式');
+        console.log(`[Generate] 纯文生图模式（currentVersionId=${currentVersionId}, hasUrl=${!!displayedUrl}）`);
       }
 
       const result = await api.generateDesign({
