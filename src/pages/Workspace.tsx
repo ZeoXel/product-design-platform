@@ -227,7 +227,8 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       id: 'v0',
       url,
       timestamp: new Date(),
-      instruction: '原始参考图'
+      instruction: '原始参考图',
+      base64,  // 保存base64数据，确保在blob URL失效时仍可使用
     };
     setVersions([initialVersion]);
     setCurrentVersionId('v0');
@@ -349,13 +350,14 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     setGenerationStep('analyzing');
 
     // 将图库图片 URL 转换为 base64，以便后续图生图使用
+    let base64: string | undefined;
     try {
-      const base64 = await urlToBase64(product.imageUrl);
+      base64 = await urlToBase64(product.imageUrl);
       setReferenceBase64(base64);
       console.log('[Workspace] 图库图片已转换为 base64');
     } catch (error) {
       console.error('[Workspace] 图库图片转换失败:', error);
-      // 转换失败时仍继续，但后续图生图可能使用 URL
+      // 转换失败时仍继续，后续会使用 URL
       setReferenceBase64(null);
     }
 
@@ -381,7 +383,8 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       url: product.imageUrl,
       timestamp: new Date(),
       instruction: '从图库选择',
-      analysis: mockAnalysis,  // 版本携带分析结果
+      analysis: mockAnalysis,
+      base64,  // 保存 base64，确保生图时可用
     };
     setVersions([initialVersion]);
     setCurrentVersionId('v0');
@@ -489,8 +492,16 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
 
     const targetVersion = versions.find(v => v.id === versionId);
 
-    // 恢复该版本的对话历史快照（如果没有快照则清空，如 V0 原始图）
-    setMessages(targetVersion?.messagesSnapshot || []);
+    // 恢复该版本的对话历史快照
+    // 特殊情况：v0 尚未定格（没有 messagesSnapshot）时，保持当前对话不变
+    // 这样用户可以在 v0 状态下积累对话素材，直到第一次生图时定格
+    if (targetVersion?.messagesSnapshot && targetVersion.messagesSnapshot.length > 0) {
+      setMessages(targetVersion.messagesSnapshot);
+    } else if (versionId !== 'v0') {
+      // 非 v0 版本没有快照时才清空（理论上不应该发生）
+      setMessages([]);
+    }
+    // v0 且无快照：保持当前对话不变，让用户继续积累素材
 
     // 恢复该版本的分析结果
     if (targetVersion?.analysis) {
@@ -526,9 +537,11 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
     };
     setMessages(prev => [...prev, userMessage]);
 
-    // 纯文生图场景：如果没有任何版本且没有参考图，先创建空白 v0
-    // v0 保存的是"生图前的对话状态"，这样用户可以回到这个节点重新尝试
+    // v0 定格逻辑：v0 应该保存"第一次生图前"的状态（包含积累的对话历史）
+    // 这样用户可以回到 v0 节点，用不同的指令重新生图
     let workingVersions = versions;
+
+    // 场景1：纯文生图（无版本、无参考图），创建空白 v0
     if (versions.length === 0 && !referenceBase64) {
       const blankV0: ImageVersion = {
         id: 'v0',
@@ -540,6 +553,20 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
       workingVersions = [blankV0];
       setVersions(workingVersions);
       console.log('[Generate] 纯文生图模式，创建空白 v0，保存对话历史:', messages.length, '条');
+    }
+    // 场景2：第一次从 v0 生图（v0 存在但尚未定格），更新 v0 的对话快照
+    else if (currentVersionId === 'v0' && versions.length === 1 && versions[0].id === 'v0') {
+      const v0 = versions[0];
+      // 只有当 v0 还没有 messagesSnapshot 或只是初始空状态时才更新
+      if (!v0.messagesSnapshot || v0.messagesSnapshot.length === 0) {
+        const updatedV0: ImageVersion = {
+          ...v0,
+          messagesSnapshot: [...messages],  // 定格：保存第一次生图前积累的对话
+        };
+        workingVersions = [updatedV0];
+        setVersions(workingVersions);
+        console.log('[Generate] 定格 v0，保存生图前对话历史:', messages.length, '条');
+      }
     }
 
     setIsGenerating(true);
@@ -571,20 +598,43 @@ export function Workspace({ onNavigate, historyItem }: WorkspaceProps = {}) {
 
       if (hasValidImage) {
         // 有图片：图生图模式
-        // 外部 URL (http/https) 直接传给后端，避免 CORS 问题
-        // 本地 blob/data URL 需要转换为 base64
-        if (displayedUrl.startsWith('http')) {
-          referenceImageToUse = displayedUrl;  // 直接传 URL
-          console.log(`[Generate] 图生图模式，直接使用 URL: ${displayedUrl.substring(0, 50)}...`);
-        } else if (displayedUrl.startsWith('blob:') || displayedUrl.startsWith('data:')) {
+        // 优先级：1. 版本中存储的base64 2. referenceBase64 3. URL 4. 转换
+
+        // 1. 检查版本中是否存储了base64（最可靠）
+        if (displayedVersion?.base64) {
+          referenceImageToUse = displayedVersion.base64;
+          console.log(`[Generate] 图生图模式，使用版本 ${currentVersionId} 存储的 base64`);
+        }
+        // 2. 对于v0版本，使用已存储的referenceBase64
+        else if (currentVersionId === 'v0' && referenceBase64) {
+          referenceImageToUse = referenceBase64;
+          console.log(`[Generate] 图生图模式，使用 v0 的 referenceBase64`);
+        }
+        // 3. 外部 URL (http/https) 或相对路径 (/) 直接传给后端
+        else if (displayedUrl.startsWith('http') || displayedUrl.startsWith('/')) {
+          // 相对路径需要转换为完整 URL
+          const fullUrl = displayedUrl.startsWith('/')
+            ? `${window.location.origin}${displayedUrl}`
+            : displayedUrl;
+          referenceImageToUse = fullUrl;
+          console.log(`[Generate] 图生图模式，使用 URL: ${fullUrl.substring(0, 80)}...`);
+        }
+        // 4. 本地 blob/data URL 需要转换为 base64
+        else if (displayedUrl.startsWith('blob:') || displayedUrl.startsWith('data:')) {
           try {
             referenceImageToUse = await urlToBase64(displayedUrl);
             console.log(`[Generate] 图生图模式，转换本地图片为 base64`);
           } catch (e) {
             console.error(`[Generate] 本地图片转换失败:`, e);
+            // 转换失败时，尝试使用 referenceBase64 作为后备
+            if (referenceBase64) {
+              referenceImageToUse = referenceBase64;
+              console.log(`[Generate] 使用 referenceBase64 作为后备`);
+            }
           }
-        } else {
-          // 其他格式尝试转换
+        }
+        // 5. 其他格式尝试转换
+        else {
           try {
             referenceImageToUse = await urlToBase64(displayedUrl);
             console.log(`[Generate] 图生图模式，使用版本 ${currentVersionId} 的图片`);

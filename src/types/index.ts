@@ -17,6 +17,7 @@ export interface ImageVersion {
   analysis?: ImageAnalysis;  // 每个版本对应的分析结果
   messagesSnapshot?: ChatMessage[];  // 生成该版本时的对话历史快照
   parentId?: string;  // 父版本ID，用于树状版本结构
+  base64?: string;  // 图片的base64数据（用于本地上传的图片，确保在URL失效时仍可使用）
 }
 
 // 成本明细
