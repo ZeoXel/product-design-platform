@@ -10,6 +10,8 @@ import type {
   ProductTypePreset,
   StylePreset,
   DesignResponseV2,
+  SeedItem,
+  ExplorationBranch,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
@@ -107,6 +109,11 @@ export interface GalleryReference {
   salesTier: 'A' | 'B' | 'C';
 }
 
+export interface ChatContext {
+  analysis?: ImageAnalysis;
+  selected_style?: string;
+}
+
 export interface ChatResponse {
   message: string;
   session_id: string;
@@ -192,7 +199,7 @@ export async function analyzeImage(params: {
   prompt?: string;
   include_similar?: boolean;
 }): Promise<ImageAnalysis> {
-  const url = `/analyze${params.include_similar !== false ? '?include_similar=true' : ''}`;
+  const url = `/analyze${params.include_similar === true ? '?include_similar=true' : ''}`;
   return request(url, {
     method: 'POST',
     body: JSON.stringify({
@@ -228,12 +235,14 @@ export async function generateImage(params: {
 export async function chat(params: {
   messages: ChatMessage[];
   session_id?: string;
+  context?: ChatContext;
 }): Promise<ChatResponse> {
   return request('/chat', {
     method: 'POST',
     body: JSON.stringify({
       messages: params.messages,
       session_id: params.session_id,
+      context: params.context,
     }),
   });
 }
@@ -444,6 +453,103 @@ export async function generateDesignV2(params: {
   });
 }
 
+// ==================== 探索模式 API ====================
+
+/**
+ * 获取探索模式种子（基于设计意图查找匹配的素材库参考图）
+ */
+export async function fetchExplorationSeeds(_intent: string): Promise<SeedItem[]> {
+  // 先获取图库列表，然后转换为 SeedItem 格式
+  const result = await listReferences({ limit: 8 });
+
+  if (!result.success || !result.items) {
+    return [];
+  }
+
+  // 将图库参考图转换为 SeedItem 格式
+  return result.items.map((item, index) => ({
+    id: item.id,
+    imageUrl: `/api/v1/gallery/images/${item.filename}`,
+    style: item.analysis?.style?.tags?.[0] || 'unknown',
+    styleName: getStyleName(item.analysis?.style?.tags?.[0]),
+    salesTier: item.salesTier,
+    similarity: 0.95 - index * 0.05, // 模拟相似度递减
+    tags: [
+      ...(item.analysis?.elements?.primary?.map(e => e.type) || []),
+      ...(item.analysis?.style?.tags?.slice(0, 2) || []),
+    ].slice(0, 3),
+  }));
+}
+
+/**
+ * 风格名称映射
+ */
+function getStyleName(styleKey?: string): string {
+  const styleNames: Record<string, string> = {
+    ocean_kawaii: '海洋风少女系',
+    bohemian: '波西米亚风',
+    bohemian_natural: '波西米亚自然系',
+    ocean_shell: '海洋贝壳系',
+    candy_playful: '糖果童趣系',
+    dreamy_star: '梦幻星空系',
+    minimalist: '极简现代风',
+    vintage_elegant: '复古典雅风',
+    ocean: '海洋风',
+    cute: '可爱风',
+    natural: '自然风',
+  };
+  return styleNames[styleKey || ''] || '未知风格';
+}
+
+/**
+ * 发散生成探索分支
+ * 从选定的种子起点生成多个设计变体
+ */
+export async function generateExplorationBranches(params: {
+  seedImageUrl: string;
+  intent: string;
+  count?: number;
+}): Promise<ExplorationBranch[]> {
+  const { seedImageUrl, intent, count = 4 } = params;
+
+  // 将种子图片转换为 base64
+  let seedBase64: string;
+  try {
+    seedBase64 = await urlToBase64(seedImageUrl);
+  } catch (error) {
+    console.error('[generateExplorationBranches] Failed to convert seed image:', error);
+    throw new Error('无法加载种子图片');
+  }
+
+  // 并行生成多个变体
+  const generatePromises = Array.from({ length: count }, async (_, i) => {
+    try {
+      const result = await generateDesign({
+        instruction: `${intent} (变体 ${i + 1})`,
+        reference_image: seedBase64,
+        image_size: '2K',
+      });
+
+      if (result.success && result.image_url) {
+        return {
+          id: `branch-${Date.now()}-${i}`,
+          seedId: 'seed',
+          imageUrl: result.image_url,
+          prompt: intent,
+          timestamp: new Date(),
+        } as ExplorationBranch;
+      }
+      return null;
+    } catch (error) {
+      console.error(`[generateExplorationBranches] Branch ${i + 1} failed:`, error);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(generatePromises);
+  return results.filter((b): b is ExplorationBranch => b !== null);
+}
+
 // 导出API对象
 export const api = {
   healthCheck,
@@ -466,6 +572,9 @@ export const api = {
   getProductTypes,
   getStyles,
   getPreset,
+  // 探索模式
+  fetchExplorationSeeds,
+  generateExplorationBranches,
 };
 
 export default api;

@@ -57,10 +57,17 @@ class GenerateRequest(BaseModel):
     style_hint: Optional[StyleHint] = Field(None, description="风格提示，用于引导生成方向")
 
 
+class ChatContext(BaseModel):
+    """对话上下文 - 包含当前分析结果等信息"""
+    analysis: Optional["ImageAnalysis"] = Field(None, description="当前图片分析结果")
+    selected_style: Optional[str] = Field(None, description="用户选择的风格")
+
+
 class ChatRequest(BaseModel):
     """对话请求"""
     messages: List[ChatMessage] = Field(..., description="对话历史")
     session_id: Optional[str] = Field(None, description="会话ID")
+    context: Optional[ChatContext] = Field(None, description="对话上下文")
 
 
 class ImageAnalyzeRequest(BaseModel):
@@ -160,6 +167,7 @@ class DesignResponse(BaseModel):
     prompt_used: Optional[str] = Field(None, description="使用的提示词")
     message: str = Field("", description="处理消息")
     cost_estimate: Optional[dict] = Field(None, description="成本估算")
+    session_id: Optional[str] = Field(None, description="会话ID")
 
 
 class ErrorResponse(BaseModel):
@@ -187,42 +195,6 @@ class StructureType(str, Enum):
     TASSEL_STYLE = "tassel_style"       # 流苏垂坠式
     MULTI_LAYER = "multi_layer"         # 多层式
     CLUSTER = "cluster"                  # 簇状式
-
-
-# ==================== 分层Prompt模型 ====================
-
-class PromptLayer(BaseModel):
-    """Prompt层"""
-    name: str = Field(..., description="层名称")
-    content: str = Field(..., description="层内容")
-    priority: int = Field(0, description="优先级，数字越小优先级越高")
-
-
-class LayeredPrompt(BaseModel):
-    """分层Prompt结构"""
-    identity: str = Field(..., description="Layer 1: 产品身份锁定")
-    structure: str = Field(..., description="Layer 2: 结构约束")
-    materials: str = Field(..., description="Layer 3: 材质描述")
-    style: str = Field(..., description="Layer 4: 风格定义")
-    modification: str = Field(..., description="Layer 5: 用户修改（KEY CHANGE）")
-    technical: str = Field(..., description="Layer 6: 技术参数")
-    negative: str = Field("", description="负面提示词")
-    full_prompt: str = Field(..., description="组装后的完整prompt")
-
-    # 元信息
-    product_type: str = Field("keychain", description="产品类型")
-    style_key: str = Field("ocean_kawaii", description="风格标识")
-
-    def get_layers(self) -> List[PromptLayer]:
-        """获取所有层列表"""
-        return [
-            PromptLayer(name="identity", content=self.identity, priority=1),
-            PromptLayer(name="structure", content=self.structure, priority=2),
-            PromptLayer(name="materials", content=self.materials, priority=3),
-            PromptLayer(name="style", content=self.style, priority=4),
-            PromptLayer(name="modification", content=self.modification, priority=5),
-            PromptLayer(name="technical", content=self.technical, priority=6),
-        ]
 
 
 # ==================== 预设模型 ====================
@@ -279,35 +251,3 @@ class PresetListResponse(BaseModel):
     """预设列表响应"""
     product_types: List[ProductTypePreset] = Field(default_factory=list)
     styles: List[StylePreset] = Field(default_factory=list)
-
-
-# ==================== 增强版请求模型 ====================
-
-class GenerateRequestV2(BaseModel):
-    """增强版设计生成请求"""
-    instruction: str = Field(..., description="用户设计指令")
-    reference_image: Optional[str] = Field(None, description="参考图base64或URL")
-    session_id: Optional[str] = Field(None, description="会话ID")
-    aspect_ratio: AspectRatio = Field(AspectRatio.RATIO_1_1, description="生成图像宽高比")
-    image_size: ImageSize = Field(ImageSize.SIZE_2K, description="生成图像尺寸")
-
-    # 新增：预设相关
-    product_type: Optional[str] = Field(None, description="产品类型ID")
-    style_key: Optional[str] = Field(None, description="风格ID")
-
-    # 新增：控制选项
-    include_similar: bool = Field(False, description="是否查找相似产品（仅用于灵感展示）")
-    use_layered_prompt: bool = Field(True, description="是否使用分层Prompt")
-
-
-class DesignResponseV2(BaseModel):
-    """增强版设计生成响应"""
-    success: bool = Field(..., description="是否成功")
-    image_url: Optional[str] = Field(None, description="生成图像URL")
-    analysis: Optional[ImageAnalysis] = Field(None, description="图像分析结果")
-    prompt_used: Optional[str] = Field(None, description="使用的提示词")
-    layered_prompt: Optional[LayeredPrompt] = Field(None, description="分层Prompt结构")
-    message: str = Field("", description="处理消息")
-    cost_estimate: Optional[dict] = Field(None, description="成本估算")
-    preset_used: Optional[dict] = Field(None, description="使用的预设信息")
-    session_id: Optional[str] = Field(None, description="会话ID（用于后续请求）")

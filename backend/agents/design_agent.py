@@ -1,28 +1,32 @@
 """
 设计助手 Agent
-整合Claude分析和图像生成能力（即梦/Nano Banana）
+整合 Claude 分析和 Seedream 图像生成能力
 
 设计理念：
 - 自然语言优先：图像模型以自然语言训练，不需要复杂模板约束
 - Agent 角色：意图识别 + 自然语言补全，辅助创作
 - 图生图原生：保持模型原生的图像参考能力
+
+核心方法：
+- analyze_reference(): 分析参考图
+- generate_design(): 生成设计（自然语言模式）
+- chat(): 对话交互
 """
 import json
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from config import get_settings
-from services import claude_service, nano_banana_service, seedream_service, preset_service
+from services import claude_service, seedream_service, preset_service
 from models import (
     AnalysisResult,
     ImageAnalysis,
     GenerationResult,
     DesignResponse,
-    DesignResponseV2,
     AspectRatio,
     ImageSize,
     ChatMessage,
-    LayeredPrompt,
+    ChatContext,
 )
 
 settings = get_settings()
@@ -99,23 +103,12 @@ class DesignAgent:
     def __init__(self):
         self.claude = claude_service
         self.preset_service = preset_service
-
-        # 根据配置选择图像生成服务
-        self.image_gen_model = getattr(settings, 'IMAGE_GENERATION_MODEL', 'seedream')
-        if self.image_gen_model == 'seedream':
-            self.image_generator = seedream_service
-            print("[Design Agent] 使用即梦4绘图模型")
-        else:
-            self.image_generator = nano_banana_service
-            print("[Design Agent] 使用Nano Banana绘图模型")
+        self.image_generator = seedream_service
+        print("[Design Agent] 使用即梦4绘图模型")
 
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.few_shot_examples = self._load_few_shot_examples()
         self.system_prompt = self._build_system_prompt()
-
-        # 默认使用自然语言模式（推荐）
-        # 分层Prompt模式保留用于兼容性
-        self.use_natural_language = True
 
     def _load_few_shot_examples(self) -> List[Dict[str, Any]]:
         """加载 few-shot 示例库"""
@@ -291,13 +284,8 @@ class DesignAgent:
         instruction: str,
         reference_image: Optional[str] = None,
         session_id: Optional[str] = None,
-        aspect_ratio: AspectRatio = AspectRatio.RATIO_1_1,
         image_size: ImageSize = ImageSize.SIZE_2K,
-        style_hint: Optional[str] = None,
-        product_type: Optional[str] = None,
-        style_key: Optional[str] = None,
         include_similar: bool = False,
-        use_natural_language: bool = True,  # 默认使用自然语言模式
     ) -> DesignResponse:
         """
         根据指令生成设计 - 自然语言模式
@@ -311,13 +299,8 @@ class DesignAgent:
             instruction: 用户设计指令
             reference_image: 参考图base64
             session_id: 会话ID
-            aspect_ratio: 宽高比
             image_size: 图像尺寸
-            style_hint: 风格提示（可选）
-            product_type: 产品类型ID（可选）
-            style_key: 风格ID（可选）
             include_similar: 是否查找相似产品
-            use_natural_language: 使用自然语言模式（推荐）
 
         Returns:
             设计响应
@@ -326,70 +309,52 @@ class DesignAgent:
         analysis = None
 
         try:
-            # 步骤1: 如果有参考图，先分析
-            if reference_image:
+            # 步骤1: 如果有参考图，先分析（仅 base64 格式可分析）
+            # URL 格式的参考图直接用于生成，跳过分析
+            is_url = reference_image and reference_image.startswith("http")
+            if reference_image and not is_url:
                 analysis = await self.analyze_reference(
                     reference_image,
                     session["id"],
                     include_similar=include_similar
                 )
+                print(f"[Design Agent] 分析参考图完成")
+            elif is_url:
+                print(f"[Design Agent] 参考图为 URL，跳过分析步骤")
             elif session.get("analysis"):
                 analysis = session["analysis"]
 
-            # 步骤2: 生成Prompt
-            if use_natural_language and self.use_natural_language:
-                # 自然语言模式：理解意图 + 简洁描述
-                design_prompt = await self.claude.enhance_prompt(
-                    user_instruction=instruction,
-                    reference_analysis=analysis,
-                )
-                print(f"[Design Agent] Natural language prompt: {design_prompt}")
-            else:
-                # 兼容旧版：分层Prompt模式
-                detected_product_type = product_type
-                detected_style = style_key or style_hint
-
-                if not detected_product_type or not detected_style:
-                    preset = self.preset_service.auto_detect_preset(
-                        text=instruction,
-                        analysis=analysis
-                    )
-                    detected_product_type = detected_product_type or preset.product_type.id
-                    detected_style = detected_style or preset.style.id
-
-                layered_prompt_obj = self.claude.generate_layered_prompt(
-                    user_instruction=instruction,
-                    reference_analysis=analysis,
-                    product_type=detected_product_type,
-                    style_key=detected_style,
-                )
-                design_prompt = layered_prompt_obj.full_prompt
+            # 步骤2: 自然语言模式生成Prompt
+            design_prompt = await self.claude.enhance_prompt(
+                user_instruction=instruction,
+                reference_analysis=analysis,
+            )
+            print(f"[Design Agent] Natural language prompt: {design_prompt}")
 
             # 步骤3: 调用图像生成服务
+            # 注意：只使用明确传入的参考图，不自动使用 session 中的图片
+            # 这样可以正确区分「图生图」和「纯文生图」场景
             reference_images = None
             if reference_image:
                 reference_images = [reference_image]
-            elif session.get("current_image"):
-                reference_images = [session["current_image"]]
-
-            if self.image_gen_model == 'seedream':
-                size_map = {
-                    ImageSize.SIZE_1K: "1K",
-                    ImageSize.SIZE_2K: "2K",
-                    ImageSize.SIZE_4K: "4K",
-                }
-                generation_result = await self.image_generator.generate(
-                    prompt=design_prompt,
-                    reference_images=reference_images,
-                    size=size_map.get(image_size, "2K"),
-                )
+                # 打印参考图信息（不打印完整内容）
+                if is_url:
+                    print(f"[Design Agent] 图生图模式，使用 URL: {reference_image[:80]}...")
+                else:
+                    print(f"[Design Agent] 图生图模式，使用 base64 ({len(reference_image)} chars)")
             else:
-                generation_result = await self.image_generator.generate(
-                    prompt=design_prompt,
-                    reference_images=reference_images,
-                    aspect_ratio=aspect_ratio,
-                    image_size=image_size,
-                )
+                print(f"[Design Agent] 纯文生图模式，不使用参考图")
+
+            size_map = {
+                ImageSize.SIZE_1K: "1K",
+                ImageSize.SIZE_2K: "2K",
+                ImageSize.SIZE_4K: "4K",
+            }
+            generation_result = await self.image_generator.generate(
+                prompt=design_prompt,
+                reference_images=reference_images,
+                size=size_map.get(image_size, "2K"),
+            )
 
             # 步骤4: 保存版本历史
             session["generated_versions"].append({
@@ -398,16 +363,41 @@ class DesignAgent:
                 "image_url": generation_result.image_url,
             })
 
-            # 步骤5: 估算成本
-            cost_estimate = self._estimate_cost(analysis)
+            # 步骤5: 分析生成的图片（后端分析避免前端 CORS 问题）
+            generated_analysis = None
+            if generation_result.image_url:
+                try:
+                    import httpx
+                    import base64
+                    print(f"[Design Agent] 正在分析生成的图片...")
+
+                    # 从 URL 获取图片
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        img_response = await client.get(generation_result.image_url)
+                        img_response.raise_for_status()
+                        img_base64 = base64.b64encode(img_response.content).decode("utf-8")
+
+                    # 分析图片
+                    generated_analysis = await self.claude.analyze_image(
+                        image_base64=img_base64,
+                        prompt=ANALYSIS_PROMPT,
+                    )
+                    print(f"[Design Agent] 生成图片分析完成")
+                except Exception as e:
+                    print(f"[Design Agent] 生成图片分析失败: {e}")
+                    # 分析失败不影响返回结果
+
+            # 步骤6: 估算成本
+            cost_estimate = self._estimate_cost(generated_analysis or analysis)
 
             return DesignResponse(
                 success=True,
                 image_url=generation_result.image_url,
-                analysis=analysis,
+                analysis=generated_analysis,  # 返回生成图片的分析
                 prompt_used=design_prompt,
                 message="设计生成成功",
                 cost_estimate=cost_estimate,
+                session_id=session["id"],
             )
 
         except Exception as e:
@@ -419,146 +409,11 @@ class DesignAgent:
                 message=f"生成失败: {str(e)}",
             )
 
-    async def generate_design_v2(
-        self,
-        instruction: str,
-        reference_image: Optional[str] = None,
-        session_id: Optional[str] = None,
-        aspect_ratio: AspectRatio = AspectRatio.RATIO_1_1,
-        image_size: ImageSize = ImageSize.SIZE_2K,
-        product_type: Optional[str] = None,
-        style_key: Optional[str] = None,
-        include_similar: bool = False,
-        use_natural_language: bool = True,  # 默认使用自然语言模式
-    ) -> DesignResponseV2:
-        """
-        V2 设计生成（默认自然语言模式）
-
-        自然语言模式：简洁、自然、让模型发挥原生能力
-        分层模式：兼容旧版，提供详细的Prompt层级信息
-        """
-        session = self._get_session(session_id)
-        analysis = None
-        layered_prompt_obj = None
-
-        try:
-            # 步骤1: 分析参考图
-            if reference_image:
-                analysis = await self.analyze_reference(
-                    reference_image,
-                    session["id"],
-                    include_similar=include_similar
-                )
-            elif session.get("analysis"):
-                analysis = session["analysis"]
-
-            # 步骤2: 生成Prompt
-            if use_natural_language and self.use_natural_language:
-                # 自然语言模式
-                design_prompt = await self.claude.enhance_prompt(
-                    user_instruction=instruction,
-                    reference_analysis=analysis,
-                )
-                print(f"[Design Agent V2] Natural language prompt: {design_prompt}")
-
-                # 构造简化的 LayeredPrompt（兼容返回格式）
-                layered_prompt_obj = LayeredPrompt(
-                    identity="",
-                    structure="",
-                    materials="",
-                    style="",
-                    modification=instruction,
-                    technical="",
-                    negative="",
-                    full_prompt=design_prompt,
-                    product_type=product_type or "generic",
-                    style_key=style_key or "natural",
-                )
-            else:
-                # 分层Prompt模式
-                detected_product_type = product_type
-                detected_style = style_key
-
-                if not detected_product_type or not detected_style:
-                    preset = self.preset_service.auto_detect_preset(
-                        text=instruction,
-                        analysis=analysis
-                    )
-                    detected_product_type = detected_product_type or preset.product_type.id
-                    detected_style = detected_style or preset.style.id
-
-                layered_prompt_obj = self.claude.generate_layered_prompt(
-                    user_instruction=instruction,
-                    reference_analysis=analysis,
-                    product_type=detected_product_type,
-                    style_key=detected_style,
-                )
-                design_prompt = layered_prompt_obj.full_prompt
-
-            # 步骤3: 图像生成
-            reference_images = None
-            if reference_image:
-                reference_images = [reference_image]
-            elif session.get("current_image"):
-                reference_images = [session["current_image"]]
-                print(f"[Design Agent V2] 使用 session 中的参考图")
-
-            if self.image_gen_model == 'seedream':
-                size_map = {
-                    ImageSize.SIZE_1K: "1K",
-                    ImageSize.SIZE_2K: "2K",
-                    ImageSize.SIZE_4K: "4K",
-                }
-                generation_result = await self.image_generator.generate(
-                    prompt=design_prompt,
-                    reference_images=reference_images,
-                    size=size_map.get(image_size, "2K"),
-                )
-            else:
-                generation_result = await self.image_generator.generate(
-                    prompt=design_prompt,
-                    reference_images=reference_images,
-                    aspect_ratio=aspect_ratio,
-                    image_size=image_size,
-                )
-
-            # 步骤4: 保存和返回
-            session["generated_versions"].append({
-                "instruction": instruction,
-                "prompt": design_prompt,
-                "image_url": generation_result.image_url,
-            })
-
-            cost_estimate = self._estimate_cost(analysis)
-
-            return DesignResponseV2(
-                success=True,
-                image_url=generation_result.image_url,
-                analysis=analysis,
-                prompt_used=design_prompt,
-                layered_prompt=layered_prompt_obj,
-                message="设计生成成功",
-                cost_estimate=cost_estimate,
-                preset_used={
-                    "product_type": layered_prompt_obj.product_type,
-                    "style": layered_prompt_obj.style_key,
-                },
-                session_id=session["id"],
-            )
-
-        except Exception as e:
-            import traceback
-            print(f"[Design Agent V2 Error] {str(e)}")
-            print(f"[Design Agent V2 Traceback] {traceback.format_exc()}")
-            return DesignResponseV2(
-                success=False,
-                message=f"生成失败: {str(e)}",
-            )
-
     async def chat(
         self,
         messages: list[ChatMessage],
         session_id: Optional[str] = None,
+        context: Optional[ChatContext] = None,
     ) -> str:
         """
         与设计助手对话
@@ -566,9 +421,10 @@ class DesignAgent:
         Args:
             messages: 对话历史
             session_id: 会话ID
+            context: 对话上下文（包含分析结果等）
 
         Returns:
-            AI回复
+            AI回复（支持结构化设计方案）
         """
         session = self._get_session(session_id)
 
@@ -584,22 +440,61 @@ class DesignAgent:
 - 参考成功案例给出具体建议
 - 预估可行性和效果
 
+## 设计方案输出格式
+
+当你提供具体的设计方案时，请使用以下结构化格式：
+
+```design
+{
+  "title": "方案标题",
+  "elements": {
+    "primary": ["主元素1", "主元素2"],
+    "secondary": ["辅助元素1", "辅助元素2"],
+    "hardware": ["五金件1"]
+  },
+  "style": ["风格标签1", "风格标签2"],
+  "colors": ["颜色1", "颜色2"],
+  "prompt": "完整的英文生成提示词..."
+}
+```
+
+这个格式会在前端以标签形式呈现，方便用户查看和操作。prompt 旁边会有生成按钮。
+
 请用专业但友好的语气回复。"""
 
         # 添加上下文
         context_messages = []
 
-        # 如果有当前设计分析，添加到上下文
-        if session.get("analysis"):
-            analysis = session['analysis']
-            # 生成分析描述
+        # 优先使用传入的 context，其次使用 session 中的分析结果
+        analysis = None
+        if context and context.analysis:
+            analysis = context.analysis
+        elif session.get("analysis"):
+            analysis = session.get("analysis")
+
+        # 如果有分析结果，添加到上下文
+        if analysis:
+            # 生成详细的分析描述
             primary_elements = ', '.join([e.type for e in analysis.elements.primary])
-            style_tags = ', '.join(analysis.style.tags)
-            description = f"主要元素: {primary_elements}; 风格: {style_tags} ({analysis.style.mood})"
+            secondary_elements = ', '.join([f"{e.type}×{e.count}" if e.count else e.type for e in analysis.elements.secondary])
+            hardware = ', '.join([e.type for e in analysis.elements.hardware])
+            style_tags = ', '.join(analysis.style.tags) if analysis.style.tags else ""
+            mood = analysis.style.mood if analysis.style else ""
+
+            context_desc = f"""[当前设计上下文]
+- 主体元素: {primary_elements or '无'}
+- 辅助元素: {secondary_elements or '无'}
+- 五金配件: {hardware or '无'}
+- 风格标签: {style_tags or '未识别'}
+- 整体氛围: {mood or '未知'}
+- 尺寸: 约{analysis.physicalSpecs.lengthCm}cm / {analysis.physicalSpecs.weightG}g"""
+
+            if context and context.selected_style:
+                context_desc += f"\n- 用户选择风格: {context.selected_style}"
 
             context_messages.append(ChatMessage(
                 role="assistant",
-                content=f"[当前设计分析]\n{description}",
+                content=context_desc,
             ))
 
         # 添加用户消息

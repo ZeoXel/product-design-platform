@@ -8,6 +8,7 @@ interface ImagePreviewProps {
   onUpload?: (file: File) => void;
   onGalleryOpen?: () => void;
   onExport?: () => void;
+  onClear?: () => void;  // 清除当前画布，回到初始状态
 }
 
 export function ImagePreview({
@@ -16,7 +17,8 @@ export function ImagePreview({
   progress = 0,
   onUpload,
   onGalleryOpen,
-  onExport
+  onExport,
+  onClear
 }: ImagePreviewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,7 +70,7 @@ export function ImagePreview({
             />
           </svg>
         </div>
-        <p className="text-gray-400 text-sm mb-1">点击或拖拽上传</p>
+        <p className="text-gray-400 text-sm mb-1">点击或拖拽上传参考图</p>
         <p className="text-gray-300 text-xs">JPG / PNG</p>
 
         {onGalleryOpen && (
@@ -82,6 +84,13 @@ export function ImagePreview({
             从图库选择
           </button>
         )}
+
+        {/* 探索模式引导 */}
+        <div className="mt-6 pt-6 border-t border-gray-100 text-center">
+          <p className="text-gray-400 text-xs">
+            或直接与右侧 Agent 对话，探索新设计方向
+          </p>
+        </div>
       </div>
     );
   }
@@ -123,6 +132,18 @@ export function ImagePreview({
 
       {currentImage && !isGenerating && (
         <div className="absolute top-3 right-3 flex gap-1.5">
+          {/* 清除按钮 - 仅在v0时显示 */}
+          {onClear && currentImage.id === 'v0' && (
+            <button
+              onClick={onClear}
+              className="p-1.5 bg-white/80 backdrop-blur rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors group"
+              title="清除画布"
+            >
+              <svg className="w-4 h-4 text-gray-500 group-hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-1.5 bg-white/80 backdrop-blur rounded-lg hover:bg-white transition-colors"

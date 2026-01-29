@@ -39,6 +39,9 @@ echo -e "\n${BLUE}🔍 检查端口状态...${NC}"
 check_port 8010 "后端API"
 check_port 3010 "前端"
 
+# 创建日志目录
+mkdir -p logs
+
 # 启动后端
 echo -e "\n${BLUE}📦 启动后端服务...${NC}"
 cd backend

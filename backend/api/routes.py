@@ -8,13 +8,10 @@ from typing import Optional
 
 from models import (
     GenerateRequest,
-    GenerateRequestV2,
     ChatRequest,
     ImageAnalyzeRequest,
-    ImageGenerateRequest,
     SimilarSearchRequest,
     DesignResponse,
-    DesignResponseV2,
     ChatResponse,
     AnalysisResult,
     ImageAnalysis,
@@ -24,7 +21,7 @@ from models import (
     DesignPreset,
 )
 from agents import design_agent
-from services import claude_service, nano_banana_service, gallery_service, embedding_service, preset_service
+from services import claude_service, seedream_service, gallery_service, preset_service
 
 router = APIRouter(prefix="/api/v1", tags=["Design API"])
 
@@ -36,17 +33,14 @@ async def generate_design(request: GenerateRequest):
     """
     主设计生成接口
 
-    根据用户指令和可选的参考图生成挂饰设计
-    支持 style_hint 参数来引导生成风格
+    根据用户指令和可选的参考图生成挂饰设计（自然语言模式）
     """
     try:
         result = await design_agent.generate_design(
             instruction=request.instruction,
             reference_image=request.reference_image,
             session_id=request.session_id,
-            aspect_ratio=request.aspect_ratio,
             image_size=request.image_size,
-            style_hint=request.style_hint.value if request.style_hint else None,
         )
         return result
     except Exception as e:
@@ -72,33 +66,6 @@ async def generate_design_with_upload(
             instruction=instruction,
             reference_image=image_base64,
             session_id=session_id,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/generate/v2", response_model=DesignResponseV2)
-async def generate_design_v2(request: GenerateRequestV2):
-    """
-    V2 设计生成接口（分层Prompt + 预设系统）
-
-    新特性:
-    - 分层Prompt结构（6层）
-    - 产品类型预设
-    - 风格预设
-    - 向量检索可选
-    - 返回完整的Prompt层级信息
-    """
-    try:
-        result = await design_agent.generate_design_v2(
-            instruction=request.instruction,
-            reference_image=request.reference_image,
-            session_id=request.session_id,
-            product_type=request.product_type,
-            style_key=request.style_key,
-            include_similar=request.include_similar,
-            image_size=request.image_size,
         )
         return result
     except Exception as e:
@@ -165,55 +132,20 @@ async def get_preset(product_type: str, style: str):
 @router.post("/analyze", response_model=ImageAnalysis)
 async def analyze_image(
     request: ImageAnalyzeRequest,
-    include_similar: bool = True  # 是否包含相似产品推荐
+    include_similar: bool = False  # 是否包含相似产品推荐（默认关闭）
 ):
     """
-    分析图像
+    分析图像（统一使用 design_agent 的分析系统）
 
     使用Claude Vision分析图像中的设计元素、风格等
     可选：自动查找图库中的相似产品
     """
     try:
-        # 1. 分析图像
-        result = await claude_service.analyze_image(
+        # 统一调用 design_agent 的分析方法
+        result = await design_agent.analyze_reference(
             image_base64=request.image,
-            prompt=request.prompt,
+            include_similar=include_similar,
         )
-
-        # 2. 如果需要，查找相似图片
-        if include_similar:
-            try:
-                # 使用标准化的英文描述生成查询向量
-                from services.search_utils import generate_multimodal_search_description
-                text_desc = generate_multimodal_search_description(result)
-                print(f"[Analyze] Query description: {text_desc[:100]}...")
-
-                query_embedding = await embedding_service.generate_embedding(
-                    image_base64=request.image,
-                    text=text_desc
-                )
-
-                if query_embedding is None:
-                    print("[Analyze] Cannot generate embedding, skipping similarity search")
-                    return result
-
-                # 使用较低阈值（文本嵌入相似度通常偏低）
-                similar = await gallery_service.find_similar(query_embedding, top_k=3, threshold=0.15)
-
-                # 添加相似产品到结果
-                from models import SimilarItem
-                result.similarItems = [
-                    SimilarItem(
-                        id=item["id"],
-                        imageUrl=item["imageUrl"],
-                        similarity=item["similarity"]
-                    )
-                    for item in similar
-                ]
-            except Exception as e:
-                # 相似推荐失败不影响主流程
-                print(f"[Analyze] Failed to find similar items: {e}")
-
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -222,18 +154,19 @@ async def analyze_image(
 @router.post("/analyze/upload", response_model=ImageAnalysis)
 async def analyze_image_upload(
     image: UploadFile = File(...),
-    prompt: Optional[str] = "分析这个挂饰设计的元素、风格和结构",
+    include_similar: bool = False,
 ):
     """
-    上传文件分析图像
+    上传文件分析图像（统一使用 design_agent 的分析系统）
     """
     try:
         content = await image.read()
         image_base64 = base64.b64encode(content).decode("utf-8")
 
-        result = await claude_service.analyze_image(
+        # 统一调用 design_agent 的分析方法
+        result = await design_agent.analyze_reference(
             image_base64=image_base64,
-            prompt=prompt,
+            include_similar=include_similar,
         )
         return result
     except Exception as e:
@@ -243,18 +176,21 @@ async def analyze_image_upload(
 # ==================== 图像生成 ====================
 
 @router.post("/image/generate", response_model=GenerationResult)
-async def generate_image(request: ImageGenerateRequest):
+async def generate_image(
+    prompt: str,
+    reference_images: Optional[list] = None,
+    size: str = "2K",
+):
     """
     直接生成图像
 
-    使用Nano Banana根据提示词生成图像
+    使用 Seedream 根据提示词生成图像
     """
     try:
-        result = await nano_banana_service.generate(
-            prompt=request.prompt,
-            reference_images=request.reference_images,
-            aspect_ratio=request.aspect_ratio,
-            image_size=request.image_size,
+        result = await seedream_service.generate(
+            prompt=prompt,
+            reference_images=reference_images,
+            size=size,
         )
         return result
     except Exception as e:
@@ -272,6 +208,7 @@ async def chat(request: ChatRequest):
         response = await design_agent.chat(
             messages=request.messages,
             session_id=request.session_id,
+            context=request.context,
         )
 
         session_id = request.session_id or "new_session"
